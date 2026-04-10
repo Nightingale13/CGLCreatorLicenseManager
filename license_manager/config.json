@@ -1,0 +1,8 @@
+{
+    "apiKey": "cgls_your_creator_api_key",
+    "products": {
+        "My Plugin": {
+            "productId": "your-product-id"
+        }
+    }
+}
