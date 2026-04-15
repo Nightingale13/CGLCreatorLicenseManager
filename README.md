@@ -142,7 +142,7 @@ The Licenses Tab shows all licenses for the selected product(s).
 | Button                | Description                                                                             |
 |-----------------------|-----------------------------------------------------------------------------------------|
 | **Refresh**           | Reload all Licenses & Trials/Discounts from the server (also `F5`)                      |
-| **+ Create License**  | Open the create dialog (also `Ctrl+N`)                                                  |
+| **+ Create License**  | Open the Create License Dialog (also `Ctrl+N`)                                          |
 | **Edit Selected**     | Edit the selected license — variant, license type, max machines, status, and expiration |
 | **View Details**      | Open the full detail view for the selected license                                      |
 | **Revoke License**    | Permanently revoke the selected license(s)                                              |
@@ -173,7 +173,7 @@ Select a row and click **Edit Selected** (or right-click → **Edit License**) t
 |-------------|---------------------------------------------------|
 | **Key**     | Full license key (selectable).                    |
 | **Email**   | Customer email address.                           |
-| **Product** | Product ID from your config.                      |
+| **Product** | Your Product name.                                |
 | **Status**  | Current status at the time the dialog was opened. |
 | **Created** | Purchase/Creation date.                           |
 
@@ -229,8 +229,8 @@ The Trials/Discounts tab shows all trial and discount codes for the selected pro
 | Button                | Description                                                                       |
 |-----------------------|-----------------------------------------------------------------------------------|
 | **Refresh**           | Reload all products, licenses, and codes from the server (also `F5`).             |
-| **+ Create Trial**    | Open the create-trial dialog (also `Ctrl+N` when this tab is active).             |
-| **+ Create Discount** | Open the create-discount dialog (also `Ctrl+Shift+N` when this tab is active).    |
+| **+ Create Trial**    | Open the Create Trial Dialog (also `Ctrl+N` when this tab is active).             |
+| **+ Create Discount** | Open the Create Discount Dialog (also `Ctrl+Shift+N` when this tab is active).    |
 | **Edit Selected**     | Edit the selected code — max uses, trial duration, discount percent, expiry, etc. |
 | **View Details**      | Open the full detail view for the selected code.                                  |
 | **Enable / Disable**  | Toggle the selected code(s) on or off without deleting them.                      |
@@ -258,14 +258,14 @@ Select a row and click **Edit Selected** (or right-click → **Edit Code**) to o
 
 #### The top section shows read-only code info for reference:
 
-| Field              | Description                                              |
-|--------------------|----------------------------------------------------------|
-| **Code**           | The code string (selectable).                            |
-| **Used**           | Number of times the code has already been redeemed.     |
-| **Trial Duration** | Trial length granted by this code, or `N/A`.             |
-| **Discount %**     | Discount percentage applied at checkout, or `N/A`.       |
-| **Created**        | Creation date of the code.                               |
-| **Product**        | Product name the code applies to (or `All Products`).    |
+| Field              | Description                                           |
+|--------------------|-------------------------------------------------------|
+| **Code**           | The code string (selectable).                         |
+| **Used**           | Number of times the code has already been redeemed.   |
+| **Trial Duration** | Trial length granted by this code, or `N/A`.          |
+| **Discount %**     | Discount percentage applied at checkout, or `N/A`.    |
+| **Created**        | Creation date of the code.                            |
+| **Product**        | Product name the code applies to (or `All Products`). |
 
 #### The editable fields section allows the following changes:
 
@@ -314,11 +314,11 @@ Hover over any cell to see the full description.
 
 ## Keyboard Shortcuts
 
-| Shortcut       | Action                                                                  |
-|----------------|-------------------------------------------------------------------------|
-| `F5`           | Refresh all (products, licenses, trials/discounts)                      |
+| Shortcut       | Action                                                                                         |
+|----------------|------------------------------------------------------------------------------------------------|
+| `F5`           | Refresh all (products, licenses, trials/discounts)                                             |
 | `Ctrl+N`       | Create new license on the **Licenses** tab, or new trial on the **Discount / Trial Codes** tab |
-| `Ctrl+Shift+N` | Create new discount code on the **Discount / Trial Codes** tab          |
+| `Ctrl+Shift+N` | Create new discount code on the **Discount / Trial Codes** tab                                 |
 ---
 
 ## Activation Counts
@@ -329,8 +329,6 @@ The CG Lounge License Server's list endpoint does not return live activation cou
 - **During the drip** — the status bar shows `Dripping license statuses...` and the 60-second refresh timer is paused.
 - **Every 60 seconds** — once the drip finishes, a background timer re-fetches all counts automatically. A live countdown in the bottom-right status bar shows when the next refresh is due.
 - **On detail view** — opening the **View Details** dialog for a license fetches its activations and violations immediately and updates that row.
-
-> The **Activations** tab inside the detail dialog has a live filter: type a hostname or country to narrow the list, or enable **Only active sessions** to show only machines with an active session.
 ---
 
 ## Troubleshooting
