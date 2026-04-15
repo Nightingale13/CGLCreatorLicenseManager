@@ -3,7 +3,7 @@
 An admin interface for Creators to manage their Product Licenses and Discount/Trial codes hosted on CG Lounge.
 Built with Python and PySide6.
 
-![License Manager UI](license_manager/icon.png)
+![License Manager UI](_readme_images/header.jpg)
 
 ---
 
@@ -40,7 +40,6 @@ Built with Python and PySide6.
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Activation Counts](#activation-counts)
 - [Troubleshooting](#troubleshooting)
-- [Change Log](#change-log)
 - [Contributing](#contributions)
 ---
 
@@ -373,76 +372,6 @@ If that is the case, please open a bug report [HERE](https://github.com/Nighting
 **For more information** — please read the following docs:
 - [Licensing Handbook](https://cglounge.studio/handbook/licensing).
 - [CG Lounge API Docs](https://cglicenseserver.vercel.app).
-
-## Change Log
-All notable changes to this project will be documented below.
-
-### [1.0.0] - 2026-04-15
-First public release. Baseline feature set of the CG Lounge Creator License Manager.
-
-#### Core License Management
-- List, create, edit, revoke, suspend, and reinstate licenses against the CG Lounge License Server.
-- Reset machine activations on a selected license.
-- Multi-select support on the Licenses table — action buttons and context menu operate on all selected rows at once.
-- Confirmation dialogs for every destructive action (Revoke, Suspend, Reset Activations, Delete).
-- **Edit License** dialog with variant/tier change, max machines (auto-adjusted for per-machine / floating / site), status change, and optional expiration. Only changed fields are sent to the server.
-- **License Detail** dialog with three tabs: Overview, Activations, and Violations. Resolve false-positive violations directly from the dialog.
-
-#### Trials & Discount Codes
-- Full CRUD for trial and discount codes on a dedicated **Discount / Trial Codes** tab.
-- Separate **Create Trial** and **Create Discount** dialogs.
-- **Edit Code** dialog for toggling active state, max uses, and expiry.
-- **All Products** support — create a single code that applies to every product on your creator account.
-- Delete, enable/disable, copy, and multi-select actions mirrored from the Licenses tab.
-
-#### Products & Filtering
-- Products fetched dynamically at launch and on every refresh via `POST /listProducts` (`live`, `unlisted`, and `archived` included).
-- Product-name and product-status filter dropdowns in the toolbar, colour-coded (🟢 Active / 🟠 Unlisted / 🟡 Archived).
-- Free-text search bar over license key, email, country, and code.
-- Per-tab filter checkboxes: **Hide Trials**, **Hide Disabled**, **Hide Expired** on Licenses; **Hide Disabled** on Codes.
-- Sortable tables with sort order persisted across launches via `QSettings`.
-
-#### Activation & Violation Tracking
-- Background **drip fetch** of activation counts and violation counts via a single `getLicense` call per row (shared payload).
-- Drip follows the current table sort/filter order — visible rows fill in first.
-- Activations column shows `—/{max}` and Violations column shows `—` until the drip populates them; violation counts > 0 render in red.
-- 60-second auto-refresh timer kicks in only after the initial drip completes, so the server is never hammered mid-fetch.
-- Status bar shows **"Dripping license statuses..."** during the drip, then a live countdown to the next auto-refresh.
-- Opening **View Details** for a license fetches its activations and violations immediately and updates that row.
-- **Activations** tab inside the detail dialog has a live hostname/country filter and an **Only active sessions** toggle.
-
-#### UI / UX
-- Tabbed interface (Licenses / Discount & Trial Codes) with active tab persisted across launches.
-- CG Lounge theme applied app-wide.
-- **Privacy Mode** toolbar toggle that pixelates sensitive columns and dialog fields (license key, email, productID, code).
-- **Snap Tabs** toolbar toggle that auto-resizes the window to fit the current tab's column widths and re-snaps on tab switch or refresh.
-- **Snap Centre** toolbar toggle (enabled only when Snap Tabs is on) that re-centers the window on the current screen after each snap.
-- Last table column auto-sized to its widest content via `QHeaderView.ResizeToContents`.
-- Context menus on both tables mirroring the bottom action buttons.
-- Thin purple **loading bar** below the table during any in-flight server request, with a wait cursor. All API calls run on a background `QThread` so the UI stays responsive.
-- Documentation button (**?**) in the toolbar opens this README in the browser.
-- Bug report button (**🐛**) in the toolbar opens the GitHub Issues page for filing reports.
-- Result counter label showing visible / total licenses.
-
-#### Keyboard Shortcuts
-- `F5` — refresh all (products, licenses, trials/discounts).
-- `Ctrl+N` — context-aware: creates a license on the Licenses tab, a trial on the Discount / Trial Codes tab.
-- `Ctrl+Shift+N` — creates a discount code on the Discount / Trial Codes tab.
-
-#### Anti-Piracy Integration
-- **Threat lvl** column (0–4) colour-coded with full-description tooltips, driven by the CG Lounge anti-piracy system.
-- License statuses (Active / Degraded / Suspended / Revoked / Expired) colour-coded via a custom `StatusDelegate`.
-- Product-status indicators pulled live from CG Lounge and shown per row.
-- **Resolve Selected** action on the Violations tab to clear false positives.
-
-#### Configuration & Security
-- First-launch password-masked prompt for a creator-scoped API key (`cgls_…`), written to `creator_secret.config` next to `license_manager.py`.
-- Optional `SERVER_URL` override in the config file.
-- API key stored only locally; delete the config file to force a re-prompt.
-- Single creator-scoped key reused across all products on the creator account.
-
-### [1.0.0-beta] - 2026-04-10
-- Initial private beta for internal testing.
 
 ## Contributions
 - [Aaron Strasbourg](https://www.aaronstrasbourgvfx.ca/) - Original code for the Creator Manager.
