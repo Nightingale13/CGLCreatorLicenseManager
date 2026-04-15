@@ -1345,8 +1345,7 @@ class EditLicenseDialog(QDialog):
             email_label = QLabel(lic.get("email", ""))
         info_layout.addRow("Key:", key_label)
         info_layout.addRow("Email:", email_label)
-        product_label = PixelatedLabel(lic.get("productId", "")) if privacy_mode else QLabel(lic.get("productId", ""))
-        info_layout.addRow("Product:", product_label)
+        info_layout.addRow("Product:", QLabel(lic.get("_productName", "") or lic.get("productId", "")))
         info_layout.addRow("Status:", QLabel(lic.get("status", "")))
         info_layout.addRow("Created:", QLabel(_format_date(lic.get("createdAt"))))
         info_group.setLayout(info_layout)
@@ -2551,14 +2550,21 @@ class LicenseManager(QMainWindow):
 
         # Keyboard shortcuts
         QShortcut(QKeySequence("F5"), self, self._refresh_all)
-        new_license_key = "Meta+N" if sys.platform == "darwin" else "Ctrl+N"
-        QShortcut(QKeySequence(new_license_key), self, self._create_license)
-        new_code_key = "Meta+Shift+N" if sys.platform == "darwin" else "Ctrl+Shift+N"
-        QShortcut(QKeySequence(new_code_key), self, self._create_code_shortcut)
+        mod = "Meta" if sys.platform == "darwin" else "Ctrl"
+        QShortcut(QKeySequence(f"{mod}+N"), self, self._new_shortcut)
+        QShortcut(QKeySequence(f"{mod}+Shift+N"), self, self._new_shift_shortcut)
 
-    def _create_code_shortcut(self):
+    def _new_shortcut(self):
+        # Ctrl+N: create license on Licenses tab, create trial on Codes tab.
         if hasattr(self, "tabs") and self.tabs.currentIndex() == 1:
             self._create_trial()
+        else:
+            self._create_license()
+
+    def _new_shift_shortcut(self):
+        # Ctrl+Shift+N: create discount on Codes tab (no-op elsewhere).
+        if hasattr(self, "tabs") and self.tabs.currentIndex() == 1:
+            self._create_discount()
 
     def _apply_style(self):
         self.setStyleSheet(DARK_STYLE)
