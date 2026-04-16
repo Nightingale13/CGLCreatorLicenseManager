@@ -15,32 +15,36 @@ Built with Python and PySide6.
 >
 > **[⬇️ Download Latest Stable Release](https://github.com/Nightingale13/CGLCreatorLicenseManager/releases/latest)**
 
+[📋 Frequently Asked Questions](FAQ.md)
+
+[📝 Change Log](CHANGELOG.md)
+
 ---
 ## Table of Contents
-- [Requirements](#requirements)
-- [Setup](#setup)
-  - [Run](#1-run)
-  - [Config (Optional)](#2-config-optional)
-- [Interface Overview](#interface-overview)
-  - [Toolbar](#toolbar-top)
-  - [Loading Bar](#loading-bar)
-  - [Status Bar](#status-bar)
-- [Licenses](#licenses)
-  - [License Action Buttons](#license-action-buttons-bottom)
-  - [Licenses Right-Click Menu](#licenses---right-click-context-menu)
-  - [Edit License](#edit-license)
-  - [License Detail](#license-detail)
-- [Trials / Discounts](#trials--discounts)
-  - [Create Trial/Discount Code](#create-trialdiscount-code)
-  - [Trials/Discounts Right-Click Menu](#right-click-context-menu---trialsdiscounts)
-  - [Edit Trial / Discount Code](#edit-trial--discount-code)
-  - [Trials / Discount Detail](#trials--discount-detail)
-- [License Statuses](#license-statuses)
-- [Threat Levels](#threat-levels)
-- [Keyboard Shortcuts](#keyboard-shortcuts)
-- [Activation Counts](#activation-counts)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributions)
+- 📋 [Requirements](#requirements)
+- ⚙️ [Setup](#-setup)
+  - ▶️ [Run](#1-run)
+  - ⚙️ [Config (Optional)](#2-config-optional)
+- 🖥️ [Interface Overview](#-interface-overview)
+  - 🔧 [Toolbar](#toolbar-top)
+  - ⏳ [Loading Bar](#loading-bar)
+  - 📊 [Status Bar](#status-bar)
+- 🔑 [Licenses](#-licenses)
+  - ⚡ [License Action Buttons](#license-action-buttons-bottom)
+  - 🟢 [License Statuses](#-license-statuses)
+  - ⚠️ [Threat Levels](#-threat-levels)
+  - ✏️ [Create / Edit License](#license-dialogs)
+  - 🖱️ [Licenses Right-Click Menu](#licenses---right-click-context-menu)
+  - 🔍 [License Detail](#license-detail)
+- 🎟️ [Trials / Discounts](#-trials--discounts) (**This feature is under heavy active development.** 🛠️)
+  - ⚡ [Trial/Discount Action Buttons](#trialdiscount-action-buttons-bottom)
+  - ➕ [Create Trial/Discount Code](#create-trialdiscount-code)
+  - 🖱️ [Trials/Discounts Right-Click Menu](#right-click-context-menu---trialsdiscounts)
+  - ✏️ [Edit Trial / Discount Code](#edit-trial--discount-code)
+  - 🔍 [Trials / Discount Detail](#trials--discount-detail)
+- ⌨️ [Keyboard Shortcuts](#-keyboard-shortcuts)
+- 📈 [Activation Counts](#-activation-counts)
+- 👥 [Contributions](#-contributions)
 ---
 
 ## Requirements
@@ -51,7 +55,7 @@ pip install PySide6
 ```
 ---
 
-## Setup
+## ⚙️ Setup
 ### 1. Run
 ```bash
 python license_manager.py
@@ -73,7 +77,7 @@ SERVER_URL=
 | `SERVER_URL` | No       | Override the default server URL.                                                                                                                                           |
 ---
 
-## Interface Overview
+## 🖥️ Interface Overview
 ![License Overview](_readme_images/LicenseManager.jpg)
 
 ### Toolbar (top)
@@ -104,7 +108,8 @@ The right side of the status bar shows **"Dripping license statuses..."** while 
 
 ![Status Bar](_readme_images/StatusBar.jpg)
 
-## Licenses
+---
+## 🔑 Licenses
 The Licenses tab shows all licenses for the selected product(s).
 ![License Overview](_readme_images/LicensesTab.jpg)
 
@@ -152,53 +157,71 @@ The Licenses tab shows all licenses for the selected product(s).
 > All destructive actions (Revoke, Suspend, Reset Activations) show a confirmation dialog before proceeding.
 You can select multiple rows and act on them all at once.
 
-#### Create License
-![Create License](_readme_images/CreateLicense.jpg)
+### 🟢 License Statuses
+The **License Status** column is updated automatically by the CG Lounge License Server's anti-piracy system.
+However, you have full control to update any status in the License Manager by using the [Edit Dialog](#license-dialogs) or the [Action Buttons](#license-action-buttons-bottom) when a license is selected.
+
+| Colour        | Status        | Description                                               |
+|---------------|---------------|-----------------------------------------------------------|
+| 🟢 **Green**  | **Active**    | License is valid and available for use.                   |
+| 🟡 **Yellow** | **Degraded**  | Violations detected; still works but user sees a warning. |
+| 🟠 **Orange** | **Suspended** | Temporarily blocked; access resumes after reinstatement.  |
+| 🔴 **Red**    | **Revoked**   | Permanently disabled.                                     |
+| ⚫ **Grey**    | **Expired**   | Past the expiry date.                                     |
+
+### ⚠️ Threat Levels
+
+The **Threat lvl** column is updated automatically by the CG Lounge License Server's anti-piracy system.
+Hover over any cell to see the full description.
+
+| Level    | Meaning                                                       |
+|----------|---------------------------------------------------------------|
+| 🟢 **0** | Clean — no violations.                                        |
+| 🟡 **1** | Warning — minor suspicious activity, license still active.    |
+| 🟠 **2** | Degraded — significant violations, nag message shown to user. |
+| 🟠 **3** | Suspended — serious abuse, access blocked after 72 hours.     |
+| 🔴 **4** | Revoked — chargeback or confirmed fraud, immediate block.     |
+
+### License Dialogs
+The **Create License** Dialog (or right-click → **Edit License**) to open the edit dialog.
+![Create License](_readme_images/LicenseDialogs.png)
+
+| Create License   |                                                                                                                                                                                                                                        | Edit License        |                                                                                                                                                                                                                                                                                                                                                              |
+|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Product**      | List of your Products.                                                                                                                                                                                                                 | **Key**             | Full license key (selectable).                                                                                                                                                                                                                                                                                                                               |
+| **Email**        | Email the license is registered to.                                                                                                                                                                                                    | **Email**           | Email the license is registered to.                                                                                                                                                                                                                                                                                                                          |
+| **Variant**      | List of Variants/Tiers pulled from your Product.                                                                                                                                                                                       | **Product**         | The Product the license is for.                                                                                                                                                                                                                                                                                                                              |
+| **License Type** | License type, this is linked to the Variant/Tier.                                                                                                                                                                                      | **Status**          | Current status at the time the dialog was opened.                                                                                                                                                                                                                                                                                                            |
+| **Max Machines** | Maximum concurrent activations. The number is pulled from each Varaint/Tier on your Product.<br><br> It is **recommended** to keep these set the same as all other licenses for this variation/tier, though adjusting it is supported. | **Created**         | Purchase/Creation date.                                                                                                                                                                                                                                                                                                                                      |
+| **Expires**      | Enable the checkbox to set an expiration date and time.                                                                                                                                                                                | **Editable Fields** |                                                                                                                                                                                                                                                                                                                                                              |
+|                  |                                                                                                                                                                                                                                        | **Variant**         | Change the license tier of an existing key. Tiers/Variants are loaded from your Product in CG Lounge. It is **recommended** to match your tiers/variations `max machines` with what you offer in those tiers/variants.<br><br>🔴 **@TODO** While "Upgrading" can be performed here, there is no additional pricing or sale support as of the latest release. |
+|                  |                                                                                                                                                                                                                                        | **Max Machines**    | Maximum concurrent activations. The number is pulled from each Varaint/Tier on your Product.<br><br> It is **recommended** to keep these set the same as all other licenses for this variation/tier, though adjusting it is supported.                                                                                                                       |                                                                                |
+|                  |                                                                                                                                                                                                                                        | **Status**          | Manually set to `active`, `degraded`, `suspended`, or `revoked`.                                                                                                                                                                                                                                                                                             |                                                                                |
+|                  |                                                                                                                                                                                                                                        | **Expires**         | Enable the checkbox to set an expiration date and time.                                                                                                                                                                                                                                                                                                      |                                                                                |
+> **Edit Dialog:** Only fields that were actually changed are sent to the server. (These are highlighted in orange) Clicking **OK** with no changes will do nothing.
 
 ### Licenses - Right-Click Context Menu
 Right-clicking any row shows a context menu with the same actions as the bottom buttons.
 
 ![Context Menu](_readme_images/LicenseContextMenu.jpg)
 
-### Edit License
-
-Select a row and click **Edit Selected** (or right-click → **Edit License**) to open the edit dialog.
-
-![Edit License](_readme_images/EditLicense.jpg)
-
-#### The top section shows read-only license info for reference:
-
-| Field       | Description                                       |
-|-------------|---------------------------------------------------|
-| **Key**     | Full license key (selectable).                    |
-| **Email**   | Customer email address.                           |
-| **Product** | Your Product name.                                |
-| **Status**  | Current status at the time the dialog was opened. |
-| **Created** | Purchase/Creation date.                           |
-
-#### The editable fields section allows the following changes:
-
-| Field            | Description                                                                                                                                                                                                                                                                                                                                                  |
-|------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Variant**      | Change the license tier of an existing key. Tiers/Variants are loaded from your Product in CG Lounge. It is **recommended** to match your tiers/variations `max machines` with what you offer in those tiers/variants.<br><br>🔴 **@TODO** While "Upgrading" can be performed here, there is no additional pricing or sale support as of the latest release. |
-| **Max Machines** | Maximum concurrent activations (`-1` = unlimited). Automatically set to `1` when switching to per-machine, `5` for floating, and unlimited for site.                                                                                                                                                                                                         |
-| **Status**       | Manually set to `active`, `degraded`, `suspended`, or `revoked`.                                                                                                                                                                                                                                                                                             |
-| **Expires**      | Enable the checkbox to set an expiration date and time.                                                                                                                                                                                                                                                                                                      |
-> Only fields that were actually changed are sent to the server. Clicking **OK** with no changes will do nothing.
-
 ### License Detail
-
 Double-click a row (or click **View Details**) to open the detail dialog. It has three tabs:
-- **Overview** — all stored fields for the license
-![License Overview](_readme_images/LicenseOverview.jpg)
-- **Activations** — list of active machines with fingerprint, hostname, country, and session info. Live filter: type a hostname or country to narrow the list, or enable **Only active sessions** to show only machines with an active session.
-![License Activations](_readme_images/LicenseActivations.jpg)
-- **Violations** — anti-piracy violation records with type, severity, and detection time. Use the **Resolve Selected** button to clear false positives.
-![License Violations](_readme_images/LicenseViolations.jpg)
+
+![License Overview](_readme_images/LicenseViewDialogs.png)
+
+| Overview                          | Activations                                                                                                                                                                                                                 | Violations                                                                                                                           |
+|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| All stored fields for the license | List of active machines with fingerprint, hostname, country, and session info. Live filter: type a hostname or country to narrow the list, or enable **Only active sessions** to show only machines with an active session. | Anti-piracy violation records with type, severity, and detection time. Use the **Resolve Selected** button to clear false positives. |
 
 ---
 
-## Trials / Discounts
+## 🎟️ Trials / Discounts
+
+> [!CAUTION]
+> **Trials and Discounts are currently under heavy active development!**  
+> Current Beta release does not include this. **Trials/Discounts** planned for v1.0.0 public release.
+
 The Trials/Discounts tab shows all trial and discount codes for the selected product(s).
 ![Trials Tab](_readme_images/TrialsTab.jpg)
 
@@ -284,34 +307,7 @@ Double-click a row (or click **View Details**) to open the detail dialog showing
 
 ---
 
-## License Statuses
-The **License Status** column is updated automatically by the CG Lounge License Server's anti-piracy system.
-However, you have full control to update any status in the License Manager by using the [Edit Dialog](#edit-license) or the [Action Buttons](#license-action-buttons-bottom) when a license is selected.
-
-| Colour        | Status        | Description                                               |
-|---------------|---------------|-----------------------------------------------------------|
-| 🟢 **Green**  | **Active**    | License is valid and available for use.                   |
-| 🟡 **Yellow** | **Degraded**  | Violations detected; still works but user sees a warning. |
-| 🟠 **Orange** | **Suspended** | Temporarily blocked; access resumes after reinstatement.  |
-| 🔴 **Red**    | **Revoked**   | Permanently disabled.                                     |
-| ⚫ **Grey**    | **Expired**   | Past the expiry date.                                     |
----
-
-## Threat Levels
-
-The **Threat lvl** column is updated automatically by the CG Lounge License Server's anti-piracy system.
-Hover over any cell to see the full description.
-
-| Level    | Meaning                                                       |
-|----------|---------------------------------------------------------------|
-| 🟢 **0** | Clean — no violations.                                        |
-| 🟡 **1** | Warning — minor suspicious activity, license still active.    |
-| 🟠 **2** | Degraded — significant violations, nag message shown to user. |
-| 🟠 **3** | Suspended — serious abuse, access blocked after 72 hours.     |
-| 🔴 **4** | Revoked — chargeback or confirmed fraud, immediate block.     |
----
-
-## Keyboard Shortcuts
+## ⌨️ Keyboard Shortcuts
 
 | Shortcut       | Action                                                                                         |
 |----------------|------------------------------------------------------------------------------------------------|
@@ -320,7 +316,7 @@ Hover over any cell to see the full description.
 | `Ctrl+Shift+N` | Create new discount code on the **Discount / Trial Codes** tab                                 |
 ---
 
-## Activation Counts
+## 📈 Activation Counts
 The CG Lounge License Server's list endpoint does not return live activation counts or violation counts. The app fetches them automatically in the background via a single `getLicense` call per row (activations and violations come from the same response).
 
 ![Status Bar](_readme_images/RefreshCount.jpg)
@@ -329,50 +325,10 @@ The CG Lounge License Server's list endpoint does not return live activation cou
 - **Every 60 seconds** — once the drip finishes, a background timer re-fetches all counts automatically. A live countdown in the bottom-right status bar shows when the next refresh is due.
 - **On detail view** — opening the **View Details** dialog for a license fetches its activations and violations immediately and updates that row.
 ---
-
-## Troubleshooting
-**Table shows 0/N activations** — The counts load in the background after the initial list.
-Wait a few seconds for them to populate, or open the detail view for a specific license to update it immediately.
-
-**Authentication errors** — Double-check your `API_KEY` value. It must be a creator-scoped key (starts with `cgls_`).
-You only have to create this once; every product uses the same `API_KEY`.
-
-**API Key rejected / 401 Unauthorized** — The key must be creator-scoped (`cgls_` prefix), not a product-scoped or admin key. Regenerate from the CG Lounge Creator dashboard, then delete `creator_secret.config` so the app re-prompts on next launch.
-
-**Window opens off-screen after a monitor change** — Snap Tabs resizes to fit columns, and window geometry is persisted via `Creator License Manager.ini`. If you need to reset window position, delete the `.ini` file:
-Windows: `C:/Users/YOUR_USERNAME/AppData/Roaming/CGLounge/Creator License Manager.ini`
-Linux: `Some_dir`
-Mac: `Some_dir`
-
-**Nothing happens when I press `Ctrl+N`** — The shortcut is context-aware: on the **Licenses** tab it creates a license; on the **Discount / Trial Codes** tab it creates a trial.
-Use `Ctrl+Shift+N` on the Codes tab for a discount.
-
-**Violations column stays on `—` forever** — The violation count is fetched by the same background drip as activations.
-If the drip hasn't completed, check the status bar — it should read `Dripping license statuses...`.
-If it's stuck, press `F5` to restart the fetch cycle.
-If it still doesn't update, please contact CG Lounge Admin, or open a bug report [HERE](https://github.com/Nightingale13/CGLCreatorLicenseManager/issues).
-
-**Edit dialog shows OK but nothing changes on the server** — The edit dialog only sends changed fields.
-If you opened Edit, made no changes, and clicked OK, the app intentionally skips the API call.
-Also note: `licenseType` is not a supported `updateLicense` field — changing Type in the UI will not persist to the server.
-
-**Create Code with `All Products` doesn't show up for every product** — `All Products` trial/discount codes are stored at the creator level, not per-product.
-They still only appear once in the Codes tab regardless of the Product filter.
-
-**Refresh feels slow / the server seems hammered** — The drip deliberately spaces `getLicense` calls at 50ms intervals to avoid rate limits.
-A large catalog (hundreds of licenses) can take a minute or more to fully drip; the 60-second auto-refresh timer waits until the drip finishes before starting.
-
-**Status bar error disappears too quickly** — Errors auto-clear after 8 seconds. Re-trigger the action to see the message again.
-If you are experiencing an issue, please open a bug report [HERE](https://github.com/Nightingale13/CGLCreatorLicenseManager/issues).
-
-**Privacy Mode didn't pixelate a field** — Privacy Mode only covers the columns/fields wired into the `PixelatedLabel` paths (key, email, productID, code).
-If a newly added field leaks sensitive data, it needs to be added to the pixelation list in code.
-If that is the case, please open a bug report [HERE](https://github.com/Nightingale13/CGLCreatorLicenseManager/issues).
-
-**For more information** — please read the following docs:
+## For more information, see below:
 - [Licensing Handbook](https://cglounge.studio/handbook/licensing).
 - [CG Lounge API Docs](https://cglicenseserver.vercel.app).
 
-## Contributions
+## 👥 Contributions
 - [Aaron Strasbourg](https://www.aaronstrasbourgvfx.ca/) - Original code for the Creator Manager.
-- [Arvid Schneider](https://www.arvidschneider.com/) - Huge special thanks for creating CG Lounge!
+- [Arvid Schneider](https://www.arvidschneider.com/) - Huge special thanks for creating CG Lounge and all the API work!
