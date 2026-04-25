@@ -8,10 +8,11 @@ Config:   creator_secret.config in the same directory as this script.
 VERSION = "1.0.0"
 
 import json
+import random
 import sys
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from string import Template
 from typing import List, Optional
@@ -62,6 +63,8 @@ COLORS: dict = {
     "accent":             "#7c3aed",
     "accent_hover":       "#6d28d9",
     "accent_dark":        "#3b2d72",
+    "field_changed":      "#ff922b",
+    "field_mismatch":     "#facc15",
 
     # ---- Status dots (LicenseTableModel / StatusDelegate) ----
     "status_active":      "#51cf66",
@@ -117,7 +120,7 @@ COLORS: dict = {
 from PySide6.QtCore import (
     QThread, Signal, Qt, QTimer, QSortFilterProxyModel,
     QAbstractTableModel, QModelIndex, QUrl, QSize, QSettings,
-    QPoint,
+    QPoint, QRect,
 )
 from PySide6.QtGui import (
     QColor, QFont, QPalette, QPainter, QPen, QPixmap, QKeySequence, QShortcut,
@@ -371,20 +374,20 @@ class APIClient:
     def reset_activations(self, auth: dict, license_key: str) -> dict:
         return self._post("resetActivations", {**auth, "licenseKey": license_key})
 
-    def list_discount_codes(self, auth: dict, product_id: str = "") -> dict:
+    def list_trial_codes(self, auth: dict, product_id: str = "") -> dict:
         payload = {**auth}
         if product_id:
             payload["productId"] = product_id
-        return self._post("listDiscountCodes", payload)
+        return self._post("listTrialCodes", payload)
 
-    def create_discount_code(self, auth: dict, **kwargs) -> dict:
-        return self._post("createDiscountCode", {**auth, **kwargs})
+    def create_trial_code(self, auth: dict, **kwargs) -> dict:
+        return self._post("createTrialCode", {**auth, **kwargs})
 
-    def update_discount_code(self, auth: dict, code: str, **kwargs) -> dict:
-        return self._post("updateDiscountCode", {**auth, "code": code, **kwargs})
+    def update_trial_code(self, auth: dict, code: str, **kwargs) -> dict:
+        return self._post("updateTrialCode", {**auth, "code": code, **kwargs})
 
-    def delete_discount_code(self, auth: dict, code: str) -> dict:
-        return self._post("deleteDiscountCode", {**auth, "code": code})
+    def delete_trial_code(self, auth: dict, code: str) -> dict:
+        return self._post("deleteTrialCode", {**auth, "code": code})
 
 
 # =============================================================================
@@ -606,6 +609,13 @@ def _enrich(lic: dict, product_names: dict = None) -> dict:
             lic["_violations"] = str(unresolved)
 
     return lic
+
+
+def _effective_status(lic: dict) -> str:
+    """Return the visual status used by the status dot — expired takes precedence over raw status."""
+    if lic.get("_expired") == "Yes":
+        return "expired"
+    return (lic.get("status") or "").lower()
 
 
 _LIC_CENTER_COLS = frozenset({
@@ -876,7 +886,7 @@ _PRIVACY_SENSITIVE_COLS: frozenset = frozenset(
 )
 # Dialog fields considered sensitive
 _PRIVACY_SENSITIVE_FIELDS: frozenset = frozenset({
-    "key", "email", "productId", "purchaseId", "bundleId", "discountCode",
+    "key", "email", "productId", "purchaseId", "bundleId",
     "disputeReason", "disputedAt",
 })
 
@@ -1003,10 +1013,10 @@ class LicenseFilterProxy(QSortFilterProxyModel):
 
 
 # =============================================================================
-# Discount / Trial Codes — Model, Delegate, Proxy
+# Trial Codes — Model, Delegate, Proxy
 # =============================================================================
 
-DISCOUNT_CODE_COLUMNS = [
+TRIAL_CODE_COLUMNS = [
     ("_statusDot",    "Status"),
     ("_productStatus", "Product Status"),
     ("_productName",  "Product"),
@@ -1014,31 +1024,36 @@ DISCOUNT_CODE_COLUMNS = [
     ("usedCount",    "Used"),
     ("maxUses",      "Max Uses"),
     ("_trialDays",   "Trial Duration"),
-    ("_percent",     "Discount %"),
     ("_expiresAt",   "Expires"),
 ]
-
-
-def _discount_percent(code: dict):
-    # TODO: API does not yet store discountPercent on discount codes.
-    # Returns the field if present (forward-compat); otherwise None.
-    return code.get("discountPercent")
 
 
 def _enrich_code(code: dict, product_names: dict = None) -> dict:
     trial = code.get("trialDays") or 0
     code["_trialDays"] = f"{trial}d" if trial and trial > 0 else "N/A"
 
-    percent = _discount_percent(code)
-    if percent is None or (trial and trial > 0):
-        code["_percent"] = "N/A"
-    else:
-        code["_percent"] = f"{percent}%"
-
     code["_expiresAt"] = _expires_in(code)
 
-    max_uses = code.get("maxUses")
-    if max_uses is None or max_uses == -1:
+    exp_str = code.get("expiresAt")
+    if exp_str:
+        try:
+            dt = datetime.fromisoformat(exp_str.replace("Z", "+00:00"))
+            code["_expired"] = dt < datetime.now(timezone.utc)
+        except Exception:
+            code["_expired"] = False
+    else:
+        code["_expired"] = False
+
+    max_uses_raw = code.get("maxUses")
+    used_count = code.get("usedCount") or 0
+    code["_maxed"] = (
+        max_uses_raw is not None
+        and max_uses_raw != -1
+        and isinstance(max_uses_raw, (int, float))
+        and int(max_uses_raw) > 0
+        and int(used_count) >= int(max_uses_raw)
+    )
+    if max_uses_raw is None or max_uses_raw == -1:
         code["maxUses"] = "Unlimited"
 
     pid = code.get("productId") or ""
@@ -1054,11 +1069,11 @@ def _enrich_code(code: dict, product_names: dict = None) -> dict:
     return code
 
 
-class DiscountCodeTableModel(QAbstractTableModel):
+class TrialCodeTableModel(QAbstractTableModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._data: List[dict] = []
-        self._columns = DISCOUNT_CODE_COLUMNS
+        self._columns = TRIAL_CODE_COLUMNS
         self._product_names: dict = {}
         self._product_statuses: dict = {}
 
@@ -1120,7 +1135,13 @@ class DiscountCodeTableModel(QAbstractTableModel):
 
         if role == Qt.ToolTipRole:
             if col_key == "_statusDot":
-                return "Active" if code.get("active", True) else "Disabled"
+                if code.get("_expired"):
+                    return "Expired — past the code's expiration date."
+                if not code.get("active", True):
+                    return "Disabled — code has been manually deactivated."
+                if code.get("_maxed"):
+                    return "Maxed out — all redemptions have been used."
+                return "Active — code is valid and available for redemption."
             return None
 
         if role == Qt.UserRole:
@@ -1139,7 +1160,7 @@ class DiscountCodeTableModel(QAbstractTableModel):
 
         if role == Qt.TextAlignmentRole:
             if col_key in ("_statusDot", "_productStatus", "usedCount",
-                           "maxUses", "_trialDays", "_percent"):
+                           "maxUses", "_trialDays"):
                 return Qt.AlignCenter
             return Qt.AlignLeft | Qt.AlignVCenter
 
@@ -1151,6 +1172,8 @@ class CodeStatusDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self._active_color = QColor(COLORS["status_active"])
         self._inactive_color = QColor(COLORS["status_revoked"])
+        self._expired_color = QColor(COLORS["status_expired"])
+        self._maxed_color = QColor(COLORS["threat_1"])   # yellow
 
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
@@ -1161,8 +1184,14 @@ class CodeStatusDelegate(QStyledItemDelegate):
         code = index.data(Qt.UserRole)
         if code is None:
             return
-        active = code.get("active", True)
-        color = self._active_color if active else self._inactive_color
+        if code.get("_expired"):
+            color = self._expired_color
+        elif not code.get("active", True):
+            color = self._inactive_color
+        elif code.get("_maxed"):
+            color = self._maxed_color
+        else:
+            color = self._active_color
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setBrush(color)
@@ -1175,18 +1204,22 @@ class CodeStatusDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-class DiscountCodeFilterProxy(QSortFilterProxyModel):
+class TrialCodeFilterProxy(QSortFilterProxyModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.hide_disabled = False
+        self.hide_expired = False
         self.product_filter = ""
         self.search_text = ""
         self.allowed_product_ids = None
 
-    def set_filters(self, hide_disabled=None, product_filter=None, search_text=None,
+    def set_filters(self, hide_disabled=None, hide_expired=None,
+                    product_filter=None, search_text=None,
                     allowed_product_ids=...):
         if hide_disabled is not None:
             self.hide_disabled = hide_disabled
+        if hide_expired is not None:
+            self.hide_expired = hide_expired
         if product_filter is not None:
             self.product_filter = product_filter
         if search_text is not None:
@@ -1202,7 +1235,13 @@ class DiscountCodeFilterProxy(QSortFilterProxyModel):
             def rank(c):
                 if not c:
                     return 99
-                return 0 if c.get("active", True) else 1
+                if c.get("_expired"):
+                    return 3
+                if not c.get("active", True):
+                    return 2
+                if c.get("_maxed"):
+                    return 1
+                return 0
             return rank(left.data(Qt.UserRole)) < rank(right.data(Qt.UserRole))
         return super().lessThan(left, right)
 
@@ -1212,6 +1251,8 @@ class DiscountCodeFilterProxy(QSortFilterProxyModel):
         if not code:
             return False
         if self.hide_disabled and not code.get("active", True):
+            return False
+        if self.hide_expired and code.get("_expired"):
             return False
         if self.product_filter:
             if (code.get("productId") or "") != self.product_filter:
@@ -1372,6 +1413,10 @@ class EditLicenseDialog(QDialog):
         self.machines_spin.setEnabled(not is_site)
         form.addRow("Max Machines:", self.machines_spin)
 
+        self._machines_hint = QLabel()
+        self._machines_hint.setStyleSheet(f"color: {COLORS['text_disabled']}; font-size: 11px;")
+        form.addRow("", self._machines_hint)
+
         self.status_combo = QComboBox()
         self.status_combo.addItems(["active", "degraded", "suspended", "revoked"])
         idx = self.status_combo.findText(lic.get("status", "active"))
@@ -1394,28 +1439,125 @@ class EditLicenseDialog(QDialog):
         edit_group.setLayout(form)
         layout.addWidget(edit_group)
 
-        _make_dialog_buttons(layout, accept=self.accept, reject=self.reject)
+        _make_dialog_buttons(layout, accept=self._on_accept, reject=self.reject)
+
+        self._variant_default_max: int | None = None
+        self._initial_load = True
+
+        self._orig_variant = lic.get("variant", "")
+        self._orig_license_type = lic.get("licenseType", "per-machine")
+        self._orig_max_machines = lic.get("maxMachines", 2)
+        self._orig_status = lic.get("status", "active")
+        self._orig_exp_checked = _exp_checked
+        self._orig_exp_dt = self.expires_edit.dateTime() if _exp_checked else None
+
+        self._changed_style = f"border: 2px solid {COLORS['field_changed']}; border-radius: 4px; padding: 2px;"
+        self._mismatch_style = f"border: 2px solid {COLORS['field_mismatch']}; border-radius: 4px; padding: 2px;"
+        self._tracked_widgets: list[QWidget] = [
+            self.variant_combo, self.type_label, self.machines_spin,
+            self.status_combo, self.expires_check, self.expires_edit,
+        ]
+        for w in self._tracked_widgets:
+            w.setProperty("_orig_style", w.styleSheet())
+
+        self.machines_spin.valueChanged.connect(self._highlight_changes)
+        self.status_combo.currentIndexChanged.connect(self._highlight_changes)
+        self.expires_check.stateChanged.connect(self._highlight_changes)
+        self.expires_edit.dateTimeChanged.connect(self._highlight_changes)
 
         pid = lic.get("productId", "")
         self.variant_combo.load(api, auth, pid, lic.get("variant", ""))
 
+    def _mark(self, widget: QWidget, changed: bool, mismatch: bool = False):
+        orig = widget.property("_orig_style") or ""
+        if changed:
+            widget.setStyleSheet(self._changed_style)
+        elif mismatch:
+            widget.setStyleSheet(self._mismatch_style)
+        else:
+            widget.setStyleSheet(orig)
+
+    def _update_hints(self):
+        if self._variant_default_max is None:
+            self._machines_hint.setText("")
+            return
+        variant_name = self.variant_combo.currentText() or "variant"
+        default_label = "Unlimited" if self._variant_default_max == -1 else str(self._variant_default_max)
+        if self.machines_spin.value() != self._variant_default_max:
+            self._machines_hint.setText(f"Default for \"{variant_name}\" is {default_label}")
+        else:
+            self._machines_hint.setText("")
+
+    def _highlight_changes(self):
+        cur_variant = self.variant_combo.currentData() or ""
+        orig_variant = self.variant_combo._strip_prefix(self._orig_variant)
+        variant_changed = cur_variant != orig_variant
+
+        type_changed = self.type_label.text() != self._orig_license_type
+        machines_changed = self.machines_spin.value() != self._orig_max_machines
+        status_changed = self.status_combo.currentText() != self._orig_status
+
+        if self.expires_check.isChecked() != self._orig_exp_checked:
+            exp_changed = True
+        elif self.expires_check.isChecked() and self._orig_exp_dt is not None:
+            exp_changed = self.expires_edit.dateTime() != self._orig_exp_dt
+        else:
+            exp_changed = False
+
+        machines_mismatch = (
+            not machines_changed
+            and self._variant_default_max is not None
+            and self.machines_spin.value() != self._variant_default_max
+        )
+
+        self._mark(self.variant_combo, variant_changed)
+        self._mark(self.type_label, type_changed)
+        self._mark(self.machines_spin, machines_changed, mismatch=machines_mismatch)
+        self._mark(self.status_combo, status_changed)
+        self._mark(self.expires_check, exp_changed)
+        self._mark(self.expires_edit, exp_changed)
+        self._update_hints()
+
     def _on_variant_selected(self, variant: dict):
+        if not self.variant_combo.isEnabled() and self._initial_load:
+            return
+
         license_type = variant.get("licenseType", "per-machine")
         self.type_label.setText(license_type)
         is_site = license_type == "site"
         self.machines_spin.setEnabled(not is_site)
+        default_max = variant.get("maxMachines")
+        if default_max is None:
+            default_max = -1 if is_site else (1 if license_type == "per-machine" else 5)
+        self._variant_default_max = default_max
 
-        # If the user returned to the license's original variant, restore the
-        # license's original maxMachines. Otherwise, use this variant's default.
-        original_variant = self.variant_combo._strip_prefix(self.lic.get("variant", "") or "")
-        selected_variant = self.variant_combo.currentData() or ""
-        if selected_variant == original_variant:
-            self.machines_spin.setValue(self.lic.get("maxMachines", 2))
+        if self._initial_load:
+            self._initial_load = False
         else:
-            default_max = variant.get("maxMachines")
-            if default_max is None:
-                default_max = -1 if is_site else (1 if license_type == "per-machine" else 5)
-            self.machines_spin.setValue(default_max)
+            cur_variant = self.variant_combo.currentData() or ""
+            orig_variant = self.variant_combo._strip_prefix(self._orig_variant)
+            if cur_variant == orig_variant:
+                self.machines_spin.setValue(self._orig_max_machines)
+            else:
+                self.machines_spin.setValue(default_max)
+        self._highlight_changes()
+
+    def _on_accept(self):
+        if (self._variant_default_max is not None
+                and self.machines_spin.value() != self._variant_default_max):
+            variant_name = self.variant_combo.currentText() or "selected variant"
+            default_label = "Unlimited" if self._variant_default_max == -1 else str(self._variant_default_max)
+            current_label = "Unlimited" if self.machines_spin.value() == -1 else str(self.machines_spin.value())
+            reply = QMessageBox.question(
+                self, "Max Machines Override",
+                f"The default Max Machines for <b>\"{variant_name}\"</b> is <b>{default_label}</b>, "
+                f"but you have set it to <b>{current_label}</b>.<br><br>"
+                f"Are you sure you want to override the variant default for this license?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+        self.accept()
 
     def get_changes(self) -> dict:
         changes = {}
@@ -1428,8 +1570,12 @@ class EditLicenseDialog(QDialog):
         if self.status_combo.currentText() != self.lic.get("status", "active"):
             changes["status"] = self.status_combo.currentText()
         if self.expires_check.isChecked():
-            new_exp = self.expires_edit.dateTime().toUTC().toString(Qt.ISODate)
-            changes["expiresAt"] = new_exp
+            if self.expires_check.isChecked() != self._orig_exp_checked:
+                changes["expiresAt"] = self.expires_edit.dateTime().toUTC().toString(Qt.ISODate)
+            elif self._orig_exp_dt is not None and self.expires_edit.dateTime() != self._orig_exp_dt:
+                changes["expiresAt"] = self.expires_edit.dateTime().toUTC().toString(Qt.ISODate)
+        elif self._orig_exp_checked:
+            changes["expiresAt"] = None
         return changes
 
 
@@ -1466,7 +1612,7 @@ class LicenseDetailDialog(QDialog):
         for field in ("key", "email", "productId", "variant", "licenseType",
                       "status", "threatLevel", "maxMachines",
                       "createdAt", "purchasedAt", "expiresAt",
-                      "discountCode", "purchaseId", "bundleId",
+                      "purchaseId", "bundleId",
                       "disputeReason", "disputedAt"):
             val = lic.get(field)
             if val is not None:
@@ -1671,11 +1817,11 @@ class LicenseDetailDialog(QDialog):
 
 
 # =============================================================================
-# Discount / Trial Code Dialogs
+# Trial Code Dialogs
 # =============================================================================
 
 class _CreateCodeDialogBase(QDialog):
-    """Shared chrome for trial/discount creation dialogs."""
+    """Shared chrome for trial code creation dialogs."""
 
     def __init__(self, products: dict, parent=None, preselect_product_id: str = ""):
         super().__init__(parent)
@@ -1686,10 +1832,9 @@ class _CreateCodeDialogBase(QDialog):
         self._form = QFormLayout()
 
         self.product_combo = QComboBox()
-        self.product_combo.addItem("All products", "")
         for name, info in products.items():
             pid = info.get("productId", "")
-            self.product_combo.addItem(f"{name}  ({pid})", pid)
+            self.product_combo.addItem(name, pid)
         if preselect_product_id:
             idx = self.product_combo.findData(preselect_product_id)
             if idx >= 0:
@@ -1697,9 +1842,58 @@ class _CreateCodeDialogBase(QDialog):
         self._form.addRow("Product:", self.product_combo)
 
         self.code_edit = QLineEdit()
-        self._form.addRow("Code:", self.code_edit)
+        self.code_edit.setPlaceholderText("e.g. BLEND-NOV25-K7X4")
+        gen_btn = QPushButton("Generate")
+        gen_btn.setMinimumWidth(100)
+        gen_btn.setToolTip("Generate a random code. Click repeatedly for different styles.")
+        gen_btn.clicked.connect(self._generate_code)
+        code_row = QHBoxLayout()
+        code_row.setSpacing(6)
+        code_row.addWidget(self.code_edit, 1)
+        code_row.addWidget(gen_btn)
+        self._form.addRow("Code:", code_row)
 
-    def _finish_build(self):
+    _MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN",
+               "JUL","AUG","SEP","OCT","NOV","DEC"]
+    # Unambiguous alphabet: no 0/O, 1/I/L to avoid misreads
+    _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+    def _generate_code(self):
+        def rand(n):
+            return "".join(random.choices(self._CODE_ALPHABET, k=n))
+
+        product_name = self.product_combo.currentText()
+        prod = "".join(c for c in product_name.upper() if c.isalpha())[:5]
+        selected_pid = self.product_combo.currentData() or ""
+
+        existing = {
+            str(c.get("code", "")).upper()
+            for c in getattr(self, "_existing_codes", [])
+            if (c.get("productId") or "") == selected_pid
+        }
+
+        now = datetime.now()
+        date_seg = self._MONTHS[now.month - 1] + str(now.year)[-2:]
+        year_seg = str(now.year)
+
+        code = ""
+        for _ in range(20):
+            pool = [rand(4), rand(4), rand(5), rand(3)]
+            if prod:
+                pool.append(prod)
+            if random.random() < 0.55:
+                pool.append(date_seg)
+            elif random.random() < 0.4:
+                pool.append(year_seg)
+
+            random.shuffle(pool)
+            code = "-".join(pool[:3])
+            if code.upper() not in existing:
+                break
+
+        self.code_edit.setText(code)
+
+    def _finish_build(self, *, exp_checked: bool = False, exp_initial_dt=None):
         self.max_uses_spin = QSpinBox()
         _install_big_arrows(self.max_uses_spin)
         self.max_uses_spin.setRange(-1, 1_000_000)
@@ -1707,7 +1901,9 @@ class _CreateCodeDialogBase(QDialog):
         self.max_uses_spin.setSpecialValueText("Unlimited (-1)")
         self._form.addRow("Max Uses:", self.max_uses_spin)
 
-        self.expires_check, self.expires_edit = _make_expiration_row(self._form)
+        self.expires_check, self.expires_edit = _make_expiration_row(
+            self._form, checked=exp_checked, initial_dt=exp_initial_dt
+        )
 
         self._layout.addLayout(self._form)
         _make_dialog_buttons(self._layout, accept=self.accept, reject=self.reject)
@@ -1727,19 +1923,23 @@ class _CreateCodeDialogBase(QDialog):
 
 
 class CreateTrialCodeDialog(_CreateCodeDialogBase):
-    def __init__(self, products: dict, parent=None, preselect_product_id: str = ""):
+    def __init__(self, products: dict, parent=None, preselect_product_id: str = "",
+                 existing_codes: list = None):
         super().__init__(products, parent, preselect_product_id)
         self.setWindowTitle("Create Trial Code")
-        self.code_edit.setPlaceholderText("TRIAL30")
+        self._existing_codes = existing_codes or []
 
         self.trial_spin = QSpinBox()
         _install_big_arrows(self.trial_spin)
         self.trial_spin.setRange(1, 3650)
-        self.trial_spin.setValue(30)
+        self.trial_spin.setValue(14)
         self.trial_spin.setSuffix(" days")
         self._form.addRow("Trial Duration:", self.trial_spin)
 
-        self._finish_build()
+        self._finish_build(
+            exp_checked=True,
+            exp_initial_dt=datetime.now() + timedelta(days=30),
+        )
 
     def get_data(self) -> dict:
         data = self._common_data()
@@ -1747,37 +1947,10 @@ class CreateTrialCodeDialog(_CreateCodeDialogBase):
         return data
 
 
-class CreateDiscountCodeDialog(_CreateCodeDialogBase):
-    def __init__(self, products: dict, parent=None, preselect_product_id: str = ""):
-        super().__init__(products, parent, preselect_product_id)
-        self.setWindowTitle("Create Discount Code")
-        self.code_edit.setPlaceholderText("LAUNCH30")
-
-        self.percent_spin = QSpinBox()
-        _install_big_arrows(self.percent_spin)
-        self.percent_spin.setRange(1, 100)
-        self.percent_spin.setValue(10)
-        self.percent_spin.setSuffix(" %")
-        self.percent_spin.setToolTip(
-            "Discount percentage. Note: the server API does not yet persist "
-            "this field; it is included for forward compatibility."
-        )
-        self._form.addRow("Discount %:", self.percent_spin)
-
-        self._finish_build()
-
-    def get_data(self) -> dict:
-        data = self._common_data()
-        data["trialDays"] = 0
-        # Forward-compat: server currently ignores this field.
-        data["discountPercent"] = self.percent_spin.value()
-        return data
-
-
-class EditDiscountCodeDialog(QDialog):
+class EditTrialCodeDialog(QDialog):
     def __init__(self, code: dict, parent=None, privacy_mode: bool = False):
         super().__init__(parent)
-        self.setWindowTitle("Edit Discount / Trial Code")
+        self.setWindowTitle("Edit Trial Code")
         self.setMinimumWidth(440)
         self.code = code
 
@@ -1793,7 +1966,6 @@ class EditDiscountCodeDialog(QDialog):
         info_layout.addRow("Code:",           _lbl(str(code.get("code", "")), sensitive=True))
         info_layout.addRow("Used:",           _lbl(str(code.get("usedCount", 0))))
         info_layout.addRow("Trial Duration:", _lbl(str(code.get("_trialDays", "N/A"))))
-        info_layout.addRow("Discount %:",     _lbl(str(code.get("_percent", "N/A"))))
         info_layout.addRow("Created:",        _lbl(_format_date(code.get("createdAt"))))
         info_layout.addRow("Product:",        _lbl(str(code.get("_productName", ""))))
         info_group.setLayout(info_layout)
@@ -1840,7 +2012,38 @@ class EditDiscountCodeDialog(QDialog):
 
         self._orig_active = code.get("active", True)
         self._orig_max_uses = current_max_val
-        self._orig_expires = exp or ""
+        self._orig_exp_checked = _exp_checked
+        self._orig_exp_dt = self.expires_edit.dateTime() if _exp_checked else None
+
+        self._changed_border = f"border: 2px solid {COLORS['field_changed']}; border-radius: 4px; padding: 2px;"
+        self._tracked_widgets: list[QWidget] = [
+            self.active_check, self.max_uses_spin,
+            self.expires_check, self.expires_edit,
+        ]
+        for w in self._tracked_widgets:
+            w.setProperty("_orig_style", w.styleSheet())
+
+        self.active_check.stateChanged.connect(self._highlight_changes)
+        self.max_uses_spin.valueChanged.connect(self._highlight_changes)
+        self.expires_check.stateChanged.connect(self._highlight_changes)
+        self.expires_edit.dateTimeChanged.connect(self._highlight_changes)
+
+    def _mark(self, widget: QWidget, changed: bool):
+        orig = widget.property("_orig_style") or ""
+        widget.setStyleSheet(self._changed_border if changed else orig)
+
+    def _highlight_changes(self):
+        self._mark(self.active_check, self.active_check.isChecked() != self._orig_active)
+        self._mark(self.max_uses_spin, self.max_uses_spin.value() != self._orig_max_uses)
+
+        if self.expires_check.isChecked() != self._orig_exp_checked:
+            exp_changed = True
+        elif self.expires_check.isChecked() and self._orig_exp_dt is not None:
+            exp_changed = self.expires_edit.dateTime() != self._orig_exp_dt
+        else:
+            exp_changed = False
+        self._mark(self.expires_check, exp_changed)
+        self._mark(self.expires_edit, exp_changed)
 
     def get_changes(self) -> dict:
         changes = {}
@@ -1848,36 +2051,37 @@ class EditDiscountCodeDialog(QDialog):
             changes["active"] = self.active_check.isChecked()
         if self.max_uses_spin.value() != self._orig_max_uses:
             changes["maxUses"] = self.max_uses_spin.value()
-        if self.expires_check.isChecked():
-            new_exp = self.expires_edit.dateTime().toUTC().toString(Qt.ISODate)
-            if new_exp != self._orig_expires:
-                changes["expiresAt"] = new_exp
-        elif self._orig_expires:
-            changes["expiresAt"] = ""
+        if self.expires_check.isChecked() != self._orig_exp_checked:
+            if self.expires_check.isChecked():
+                changes["expiresAt"] = self.expires_edit.dateTime().toUTC().toString(Qt.ISODate)
+            else:
+                changes["expiresAt"] = None
+        elif self.expires_check.isChecked() and self._orig_exp_dt is not None:
+            if self.expires_edit.dateTime() != self._orig_exp_dt:
+                changes["expiresAt"] = self.expires_edit.dateTime().toUTC().toString(Qt.ISODate)
         return changes
 
 
-class DiscountCodeDetailDialog(QDialog):
-    """Read-only detail view for a discount / trial code."""
+class TrialCodeDetailDialog(QDialog):
+    """Read-only detail view for a trial code."""
 
     # Ordered (key, label) pairs for the fields we care to surface.
     _FIELDS = [
-        ("code",            "Code"),
-        ("_productName",    "Product"),
-        ("productId",       "Product ID"),
-        ("active",          "Active"),
-        ("trialDays",       "Trial Days"),
-        ("discountPercent", "Discount %"),
-        ("usedCount",       "Used Count"),
-        ("maxUses",         "Max Uses"),
-        ("createdAt",       "Created"),
-        ("expiresAt",       "Expires"),
+        ("code",         "Code"),
+        ("_productName", "Product"),
+        ("productId",    "Product ID"),
+        ("active",       "Active"),
+        ("trialDays",    "Trial Days"),
+        ("usedCount",    "Used Count"),
+        ("maxUses",      "Max Uses"),
+        ("createdAt",    "Created"),
+        ("expiresAt",    "Expires"),
     ]
 
     _DATE_FIELDS = frozenset({"createdAt", "expiresAt"})
     _SENSITIVE_FIELDS = frozenset({"code", "productId"})
     _SKIP_EXTRA = frozenset({
-        "_statusDot", "_trialDays", "_percent", "_expiresAt",
+        "_statusDot", "_trialDays", "_expiresAt",
         "creatorId", "creatorID",
     })
 
@@ -2189,6 +2393,19 @@ class LicenseManager(QMainWindow):
         header.setSectionResizeMode(last, QHeaderView.ResizeToContents)
         return bool(widths)
 
+    def _grow_columns(self, table, prefix: str):
+        """Expand any column that is narrower than its current content; never shrink."""
+        header = table.horizontalHeader()
+        changed = False
+        last = header.count() - 1
+        for col in range(last):  # skip last col — it's ResizeToContents
+            needed = table.sizeHintForColumn(col)
+            if needed > header.sectionSize(col):
+                table.setColumnWidth(col, needed)
+                changed = True
+        if changed:
+            _save_col_widths_for(prefix, header)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"CGLounge Creator License Manager   v{VERSION}")
@@ -2416,7 +2633,7 @@ class LicenseManager(QMainWindow):
         self.tabs.addTab(licenses_page, "Licenses")
 
         # ============================================================
-        # Discount / Trial Codes tab
+        # Trial Codes tab
         # ============================================================
         codes_page = QWidget()
         codes_layout = QVBoxLayout(codes_page)
@@ -2429,14 +2646,22 @@ class LicenseManager(QMainWindow):
             self._on_codes_filter_changed, settings,
         )
         self.hide_disabled_codes_cb.setToolTip(
-            "Hide disabled discount/trial codes from the table."
+            "Hide disabled trial codes from the table."
         )
         codes_subbar.addWidget(self.hide_disabled_codes_cb)
+        self.hide_expired_codes_cb = _make_settings_checkbox(
+            "Hide Expired", "filter/hideExpiredCodes",
+            self._on_codes_filter_changed, settings,
+        )
+        self.hide_expired_codes_cb.setToolTip(
+            "Hide trial codes that have passed their expiration date."
+        )
+        codes_subbar.addWidget(self.hide_expired_codes_cb)
         codes_subbar.addStretch()
         codes_layout.addLayout(codes_subbar)
 
-        self.code_model = DiscountCodeTableModel()
-        self.code_proxy = DiscountCodeFilterProxy()
+        self.code_model = TrialCodeTableModel()
+        self.code_proxy = TrialCodeFilterProxy()
         self.code_proxy.setSourceModel(self.code_model)
         self.code_proxy.setDynamicSortFilter(True)
 
@@ -2447,7 +2672,7 @@ class LicenseManager(QMainWindow):
         )
         self.code_table.setItemDelegateForColumn(0, CodeStatusDelegate(self.code_table))
         _code_col_idx = next(
-            (i for i, (k, _) in enumerate(DISCOUNT_CODE_COLUMNS) if k == "code"),
+            (i for i, (k, _) in enumerate(TRIAL_CODE_COLUMNS) if k == "code"),
             None,
         )
         if _code_col_idx is not None:
@@ -2460,7 +2685,7 @@ class LicenseManager(QMainWindow):
         )
 
         codes_layout.addWidget(self.code_table, 1)
-        self.tabs.addTab(codes_page, "Discount / Trial Codes")
+        self.tabs.addTab(codes_page, "Trial Codes")
 
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
@@ -2508,8 +2733,7 @@ class LicenseManager(QMainWindow):
         codes_action_bar.setContentsMargins(0, 0, 0, 0)
 
         self.refresh_codes_btn = _make_action_button("Refresh", self._refresh_all, codes_action_bar)
-        self.create_trial_btn = _make_action_button("+ Create Trial", self._create_trial, codes_action_bar, css_class="success")
-        self.create_discount_btn = _make_action_button("+ Create Discount", self._create_discount, codes_action_bar, css_class="success")
+        self.create_trial_btn = _make_action_button("+ Create Trial Code", self._create_trial, codes_action_bar, css_class="success")
         self.edit_code_btn = _make_action_button("Edit Selected", self._edit_selected_code, codes_action_bar)
         self.detail_code_btn = _make_action_button("View Details", self._view_code_detail, codes_action_bar)
 
@@ -2536,7 +2760,7 @@ class LicenseManager(QMainWindow):
         self.table.sortByColumn(_sort_col, _sort_order)
 
         _code_default_col = next(
-            (i for i, (k, _) in enumerate(DISCOUNT_CODE_COLUMNS) if k == "code"), 0
+            (i for i, (k, _) in enumerate(TRIAL_CODE_COLUMNS) if k == "code"), 0
         )
         _code_sort_col = settings.value("codeTable/sortColumn", _code_default_col, type=int)
         _code_sort_order = Qt.SortOrder(settings.value("codeTable/sortOrder", 0, type=int))
@@ -2552,19 +2776,13 @@ class LicenseManager(QMainWindow):
         QShortcut(QKeySequence("F5"), self, self._refresh_all)
         mod = "Meta" if sys.platform == "darwin" else "Ctrl"
         QShortcut(QKeySequence(f"{mod}+N"), self, self._new_shortcut)
-        QShortcut(QKeySequence(f"{mod}+Shift+N"), self, self._new_shift_shortcut)
 
     def _new_shortcut(self):
-        # Ctrl+N: create license on Licenses tab, create trial on Codes tab.
+        # Ctrl+N: create license on Licenses tab, create trial code on Trial Codes tab.
         if hasattr(self, "tabs") and self.tabs.currentIndex() == 1:
             self._create_trial()
         else:
             self._create_license()
-
-    def _new_shift_shortcut(self):
-        # Ctrl+Shift+N: create discount on Codes tab (no-op elsewhere).
-        if hasattr(self, "tabs") and self.tabs.currentIndex() == 1:
-            self._create_discount()
 
     def _apply_style(self):
         self.setStyleSheet(DARK_STYLE)
@@ -2575,21 +2793,39 @@ class LicenseManager(QMainWindow):
         has_any = len(selected) > 0
         has_one = len(selected) == 1
 
+        lics = self._selected_licenses() if has_any else []
+        statuses = [_effective_status(lic) for lic in lics]
+        can_revoke    = bool(statuses) and all(s != "revoked" for s in statuses)
+        can_suspend   = any(s not in ("suspended", "revoked") for s in statuses)
+        can_reinstate = bool(statuses) and all(s in ("suspended", "revoked") for s in statuses)
+
         self.edit_btn.setEnabled(has_one)
         self.detail_btn.setEnabled(has_one)
-        self.revoke_btn.setEnabled(has_any)
-        self.suspend_btn.setEnabled(has_any)
-        self.reinstate_btn.setEnabled(has_any)
+        self.revoke_btn.setEnabled(can_revoke)
+        self.suspend_btn.setEnabled(can_suspend)
+        self.reinstate_btn.setEnabled(can_reinstate)
         self.reset_activations_btn.setEnabled(has_any)
         self.copy_key_btn.setEnabled(has_any)
 
         code_selected = self.code_table.selectionModel().selectedRows() if hasattr(self, "code_table") else []
+        codes = self._selected_codes() if code_selected else []
         code_any = len(code_selected) > 0
         code_one = len(code_selected) == 1
         if hasattr(self, "edit_code_btn"):
+            all_active   = all(c.get("active", True) for c in codes)
+            all_disabled = all(not c.get("active", True) for c in codes)
             self.edit_code_btn.setEnabled(code_one)
             self.detail_code_btn.setEnabled(code_one)
             self.toggle_code_btn.setEnabled(code_any)
+            if code_any:
+                if all_active:
+                    self.toggle_code_btn.setText("Disable")
+                elif all_disabled:
+                    self.toggle_code_btn.setText("Enable")
+                else:
+                    self.toggle_code_btn.setText("Enable / Disable")
+            else:
+                self.toggle_code_btn.setText("Enable / Disable")
             self.delete_code_btn.setEnabled(code_any)
             self.copy_code_btn.setEnabled(code_any)
 
@@ -2791,6 +3027,7 @@ class LicenseManager(QMainWindow):
         if hasattr(self, "code_proxy"):
             self.code_proxy.set_filters(
                 hide_disabled=self.hide_disabled_codes_cb.isChecked(),
+                hide_expired=self.hide_expired_codes_cb.isChecked(),
             )
         self._update_count()
 
@@ -2877,7 +3114,7 @@ class LicenseManager(QMainWindow):
         self._run_async(fetch, on_done)
 
     def _refresh_all(self):
-        """Refresh products, then licenses and discount codes."""
+        """Refresh products, then licenses and trial codes."""
         def after_products():
             self._refresh_licenses()
             self._refresh_codes()
@@ -2924,6 +3161,8 @@ class LicenseManager(QMainWindow):
                 self._lic_col_widths_restored = True
                 if self.snap_tabs_cb.isChecked() and self.tabs.currentIndex() == 0:
                     QTimer.singleShot(0, self._snap_to_current_tab)
+            else:
+                self._grow_columns(self.table, "table")
             self._update_count()
             self.refresh_btn.setEnabled(True)
             self._update_button_states()
@@ -2998,14 +3237,43 @@ class LicenseManager(QMainWindow):
 
         def on_done(result):
             if result.get("success"):
-                self._show_status("License updated.")
-                self._refresh_licenses()
+                self.model.update_license_row(license_key, changes)
+                self._update_count()
+                self._update_button_states()
+                self._show_status("License updated. Refreshing...")
+                self._drip_single_license(license_key)
             else:
                 status = result.get("_status", "?")
                 msg = result.get("error") or result.get("message") or str(result)
                 self._show_error(f"Update failed (HTTP {status}): {msg}")
 
         self._run_async(update, on_done)
+
+    def _refresh_selected_licenses(self):
+        selected = self._selected_licenses()
+        if not selected:
+            return
+        count = len(selected)
+        self._show_status(f"Refreshing {count} license{'s' if count > 1 else ''}...")
+        for lic in selected:
+            self._drip_single_license(lic["key"])
+
+    def _drip_single_license(self, license_key: str):
+        auth = self._get_auth()
+
+        def fetch():
+            return self.api.get_license(auth, license_key)
+
+        def on_done(result):
+            if result.get("success"):
+                self.model.update_license_row(license_key, result)
+                activations = result.get("activations", [])
+                self.model.update_activation_count(license_key, len(activations))
+                violations = result.get("violations", [])
+                self.model.update_violation_count(license_key, len(violations))
+                self._show_status("License updated.")
+
+        self._run_async(fetch, on_done)
 
     def _view_detail(self):
         selected = self._selected_licenses()
@@ -3083,21 +3351,22 @@ class LicenseManager(QMainWindow):
                 self._show_status(
                     f"Reset {count} license(s) — {total_deleted} activation(s) removed."
                 )
-            self._refresh_licenses()
+            for key, r in results:
+                if r.get("success"):
+                    self._drip_single_license(key)
 
         self._run_async(do_reset, on_done)
 
     _REVOKE_OPTIONS = [
         ("Revoke",          "manual",    "Revoked",
-         "Revoke {n} license(s)?\n\n"
-         "This will immediately prevent activation and validation."),
+         "Generic admin revoke.\n\n"
+         "Revoke {n} license(s)? This will immediately prevent activation and validation."),
         ("Revoke as Fraud", "fraud",     "Revoked (fraud)",
-         "Revoke {n} license(s) as fraud?\n\n"
-         "This flags the license(s) as fraudulent and immediately "
-         "prevents activation and validation."),
+         "Admin flagged the license as fraudulent.\n\n"
+         "Revoke {n} license(s) as fraud? This will immediately prevent activation and validation."),
         ("Cancel License",  "cancelled", "Cancelled",
-         "Cancel {n} license(s)?\n\n"
-         "This will immediately prevent activation and validation."),
+         "Order cancelled outside the payment flow.\n\n"
+         "Cancel {n} license(s)? This will immediately prevent activation and validation."),
     ]
 
     def _build_revoke_menu(self, parent) -> QMenu:
@@ -3112,7 +3381,8 @@ class LicenseManager(QMainWindow):
         return menu
 
     def _revoke_with_reason(self, reason: str, past_tense: str, confirm_fmt: str):
-        selected = self._selected_licenses()
+        selected = [lic for lic in self._selected_licenses()
+                    if (lic.get("status") or "").lower() != "revoked"]
         if not selected:
             return
 
@@ -3127,7 +3397,8 @@ class LicenseManager(QMainWindow):
         self._bulk_license_action(selected, do_revoke, past_tense)
 
     def _suspend_selected(self):
-        selected = self._selected_licenses()
+        selected = [lic for lic in self._selected_licenses()
+                    if (lic.get("status") or "").lower() not in ("suspended", "revoked")]
         if not selected:
             return
 
@@ -3140,7 +3411,8 @@ class LicenseManager(QMainWindow):
         self._bulk_license_action(selected, self.api.suspend_license, "Suspended")
 
     def _reinstate_selected(self):
-        selected = self._selected_licenses()
+        selected = [lic for lic in self._selected_licenses()
+                    if (lic.get("status") or "").lower() in ("suspended", "revoked")]
         if not selected:
             return
 
@@ -3179,6 +3451,11 @@ class LicenseManager(QMainWindow):
         has_any = len(selected) > 0
         has_one = len(selected) == 1
 
+        statuses = [_effective_status(lic) for lic in selected]
+        can_revoke    = bool(statuses) and all(s != "revoked" for s in statuses)
+        can_suspend   = any(s not in ("suspended", "revoked") for s in statuses)
+        can_reinstate = bool(statuses) and all(s in ("suspended", "revoked") for s in statuses)
+
         menu = QMenu(self)
         menu.setStyleSheet(CONTEXT_MENU_STYLE)
 
@@ -3192,7 +3469,7 @@ class LicenseManager(QMainWindow):
         menu.addSeparator()
         revoke_submenu = menu.addMenu("Revoke License")
         revoke_submenu.setStyleSheet(CONTEXT_MENU_STYLE)
-        revoke_submenu.setEnabled(has_any)
+        revoke_submenu.setEnabled(can_revoke)
         for label, reason, past_tense, confirm_fmt in self._REVOKE_OPTIONS:
             revoke_submenu.addAction(
                 label,
@@ -3200,13 +3477,16 @@ class LicenseManager(QMainWindow):
                     self._revoke_with_reason(r, pt, cf),
             )
         a = menu.addAction("Suspend License", self._suspend_selected)
-        a.setEnabled(has_any)
+        a.setEnabled(can_suspend)
         a = menu.addAction("Reinstate License", self._reinstate_selected)
+        a.setEnabled(can_reinstate)
+        menu.addSeparator()
+        a = menu.addAction("Refresh License", self._refresh_selected_licenses)
         a.setEnabled(has_any)
 
         menu.exec(self.table.viewport().mapToGlobal(pos))
 
-    # -- Discount / trial code actions --
+    # -- Trial code actions --
 
     def _selected_codes(self) -> List[dict]:
         indexes = self.code_table.selectionModel().selectedRows()
@@ -3219,14 +3499,14 @@ class LicenseManager(QMainWindow):
         return result
 
     def _refresh_codes(self):
-        self._show_status("Refreshing discount codes...")
+        self._show_status("Refreshing trial codes...")
         auth = self._get_auth()
         if not auth:
             return
         pid = self.product_combo.currentData() or ""
 
         def fetch():
-            return self.api.list_discount_codes(auth, product_id=pid)
+            return self.api.list_trial_codes(auth, product_id=pid)
 
         def on_done(result):
             if result.get("success"):
@@ -3241,24 +3521,24 @@ class LicenseManager(QMainWindow):
                     self._code_col_widths_restored = True
                     if self.snap_tabs_cb.isChecked() and self.tabs.currentIndex() == 1:
                         QTimer.singleShot(0, self._snap_to_current_tab)
+                else:
+                    self._grow_columns(self.code_table, "codeTable")
                 self._update_count()
-                self._show_status(f"Loaded {len(codes)} discount code(s)")
+                self._show_status(f"Loaded {len(codes)} trial code(s)")
             else:
-                msg = result.get("error") or "Failed to list discount codes"
+                msg = result.get("error") or "Failed to list trial codes"
                 self._show_error(f"{msg} (HTTP {result.get('_status', '?')})")
 
         self._run_async(fetch, on_done)
 
     def _create_trial(self):
-        self._create_code_from_dialog(CreateTrialCodeDialog)
-
-    def _create_discount(self):
-        self._create_code_from_dialog(CreateDiscountCodeDialog)
-
-    def _create_code_from_dialog(self, dialog_cls):
-        dlg = dialog_cls(
+        if not self.products:
+            self._show_error("No products loaded yet. Click Refresh.")
+            return
+        dlg = CreateTrialCodeDialog(
             self.products, self,
             preselect_product_id=self.product_combo.currentData() or "",
+            existing_codes=self.code_model.all_codes(),
         )
         if dlg.exec() != QDialog.Accepted:
             return
@@ -3266,16 +3546,19 @@ class LicenseManager(QMainWindow):
         if not data.get("code"):
             self._show_error("Code is required.")
             return
+        if not data.get("productId"):
+            self._show_error("A product must be selected.")
+            return
 
         auth = self._get_auth()
 
         def create():
-            return self.api.create_discount_code(auth, **data)
+            return self.api.create_trial_code(auth, **data)
 
         def on_done(result):
             if result.get("success"):
                 code_str = result.get("code", data.get("code", ""))
-                self._show_status(f"Code created: {code_str}")
+                self._show_status(f"Trial code created: {code_str}")
                 self._refresh_codes()
             else:
                 self._show_error(result.get("error", "Creation failed"))
@@ -3286,7 +3569,7 @@ class LicenseManager(QMainWindow):
         selected = self._selected_codes()
         if len(selected) != 1:
             return
-        DiscountCodeDetailDialog(
+        TrialCodeDetailDialog(
             selected[0], self,
             privacy_mode=self.privacy_cb.isChecked(),
         ).exec()
@@ -3296,7 +3579,7 @@ class LicenseManager(QMainWindow):
         if len(selected) != 1:
             return
         code = selected[0]
-        dlg = EditDiscountCodeDialog(code, self, privacy_mode=self.privacy_cb.isChecked())
+        dlg = EditTrialCodeDialog(code, self, privacy_mode=self.privacy_cb.isChecked())
         if dlg.exec() != QDialog.Accepted:
             return
         changes = dlg.get_changes()
@@ -3308,7 +3591,7 @@ class LicenseManager(QMainWindow):
         code_str = str(code.get("code", ""))
 
         def update():
-            return self.api.update_discount_code(auth, code_str, **changes)
+            return self.api.update_trial_code(auth, code_str, **changes)
 
         def on_done(result):
             if result.get("success"):
@@ -3329,7 +3612,7 @@ class LicenseManager(QMainWindow):
             results = []
             for code in selected:
                 new_active = not code.get("active", True)
-                r = self.api.update_discount_code(
+                r = self.api.update_trial_code(
                     auth, str(code.get("code", "")), active=new_active,
                 )
                 results.append(r)
@@ -3348,7 +3631,7 @@ class LicenseManager(QMainWindow):
             return
         if not _confirm(
             self, "Confirm Delete",
-            f"Permanently delete {len(selected)} discount code(s)?\n\n"
+            f"Permanently delete {len(selected)} trial code(s)?\n\n"
             "This cannot be undone."
         ):
             return
@@ -3358,7 +3641,7 @@ class LicenseManager(QMainWindow):
         def work():
             results = []
             for code in selected:
-                r = self.api.delete_discount_code(auth, str(code.get("code", "")))
+                r = self.api.delete_trial_code(auth, str(code.get("code", "")))
                 results.append(r)
             return results
 
@@ -3385,6 +3668,13 @@ class LicenseManager(QMainWindow):
         has_any = len(selected) > 0
         has_one = len(selected) == 1
 
+        if has_any:
+            all_active   = all(c.get("active", True) for c in selected)
+            all_disabled = all(not c.get("active", True) for c in selected)
+            toggle_label = "Disable" if all_active else ("Enable" if all_disabled else "Enable / Disable")
+        else:
+            toggle_label = "Enable / Disable"
+
         menu = QMenu(self)
         menu.setStyleSheet(CONTEXT_MENU_STYLE)
 
@@ -3396,7 +3686,7 @@ class LicenseManager(QMainWindow):
         a = menu.addAction("Copy Code", self._copy_code)
         a.setEnabled(has_any)
         menu.addSeparator()
-        a = menu.addAction("Enable / Disable", self._toggle_code_active)
+        a = menu.addAction(toggle_label, self._toggle_code_active)
         a.setEnabled(has_any)
         a = menu.addAction("Delete Code", self._delete_selected_code)
         a.setEnabled(has_any)
@@ -3421,6 +3711,24 @@ class BigArrowProxyStyle(QProxyStyle):
         QStyle.PrimitiveElement.PE_IndicatorSpinMinus,
         QStyle.PrimitiveElement.PE_IndicatorArrowDown,
     })
+
+    _BTN_WIDTH = 20
+
+    def subControlRect(self, cc, option, sc, widget=None):
+        if cc == QStyle.ComplexControl.CC_SpinBox:
+            r = self.proxy().subControlRect(cc, option, sc, widget) if self != self.proxy() \
+                else super().subControlRect(cc, option, sc, widget)
+            full = option.rect
+            bw = self._BTN_WIDTH
+            if sc == QStyle.SubControl.SC_SpinBoxUp:
+                return QRect(full.right() - bw + 1, full.top(), bw, full.height() // 2)
+            if sc == QStyle.SubControl.SC_SpinBoxDown:
+                half = full.height() // 2
+                return QRect(full.right() - bw + 1, full.top() + half, bw, full.height() - half)
+            if sc == QStyle.SubControl.SC_SpinBoxEditField:
+                return QRect(full.left(), full.top(), full.width() - bw, full.height())
+            return r
+        return super().subControlRect(cc, option, sc, widget)
 
     def drawPrimitive(self, element, option, painter, widget=None):
         is_up = element in self._UP_ELEMENTS
