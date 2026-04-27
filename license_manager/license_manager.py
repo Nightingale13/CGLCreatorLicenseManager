@@ -3,6 +3,8 @@ Creator License Manager v1.0.0 — Desktop admin tool for CG Lounge License Serv
 Requires: PySide6, Python 3.9+
 Config:   creator_secret.config in the same directory as this script.
 
+2026-04-27 - Aaron Strasbourg
+
 """
 
 VERSION = "1.0.0"
@@ -579,8 +581,11 @@ def _enrich(lic: dict, product_names: dict = None) -> dict:
     if max_m == -1:
         max_m = "Unlimited"
     activations = lic.get("activations")
+    machines_used = lic.get("machinesUsed")
     if activations is not None:
         lic["_activations"] = f"{len(activations)}/{max_m}"
+    elif machines_used is not None:
+        lic["_activations"] = f"{machines_used}/{max_m}"
     else:
         lic["_activations"] = f"—/{max_m}"
 
@@ -600,7 +605,9 @@ def _enrich(lic: dict, product_names: dict = None) -> dict:
     else:
         lic["_expired"] = "No"
 
-    if "_violations" not in lic:
+    if "unresolvedViolationsCount" in lic:
+        lic["_violations"] = str(lic["unresolvedViolationsCount"])
+    elif "_violations" not in lic:
         violations = lic.get("violations")
         if violations is None:
             lic["_violations"] = "—"
@@ -1671,6 +1678,10 @@ class LicenseDetailDialog(QDialog):
         self._act_search.setClearButtonEnabled(True)
         filter_row.addWidget(self._act_search, 1)
         self._act_session_chk = CheckBox("")
+        self._act_session_chk.setToolTip(
+            "Only show activations with an active floating session.\n"
+            "This field is always False for per-machine and site licenseTypes."
+        )
         filter_row.addWidget(self._act_session_chk)
         self._act_count_lbl = QLabel()
         self._act_count_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -2445,8 +2456,7 @@ class LicenseManager(QMainWindow):
 
         self._activation_timer = QTimer(self)
         self._activation_timer.setInterval(60_000)
-        self._activation_timer.timeout.connect(self._refresh_activation_counts)
-        self._dripping = bool(self.api_key)
+        self._activation_timer.timeout.connect(self._auto_refresh_licenses)
 
         # Countdown label pinned to the right of the status bar
         self._countdown_lbl = QLabel()
@@ -2664,6 +2674,7 @@ class LicenseManager(QMainWindow):
         self.code_proxy = TrialCodeFilterProxy()
         self.code_proxy.setSourceModel(self.code_model)
         self.code_proxy.setDynamicSortFilter(True)
+        self._on_codes_filter_changed()
 
         self.code_table = QTableView()
         self.code_table.setModel(self.code_proxy)
@@ -2921,68 +2932,13 @@ class LicenseManager(QMainWindow):
         self.code_table.viewport().update()
 
     def _update_countdown(self):
-        if getattr(self, "_dripping", False):
-            text = "Dripping license statuses..."
+        remaining = self._activation_timer.remainingTime()
+        if remaining < 0:
+            text = "License auto-refresh: ↻ —"
         else:
-            remaining = max(0, self._activation_timer.remainingTime() // 1000)
-            text = f"Activation count refresh: ↻ {remaining}s"
+            text = f"License auto-refresh: ↻ {remaining // 1000}s"
         if self._countdown_lbl.text() != text:
             self._countdown_lbl.setText(text)
-
-    def _keys_in_view_order(self) -> list:
-        """License keys ordered to match the proxy's current sort/filter, so
-        drip-fed updates fill the table top-to-bottom as the user sees it."""
-        keys = []
-        for row in range(self.proxy.rowCount()):
-            src = self.proxy.mapToSource(self.proxy.index(row, 0))
-            lic = self.model.get_row(src.row())
-            if lic and lic.get("key"):
-                keys.append(lic["key"])
-        return keys
-
-    def _refresh_activation_counts(self):
-        self._fetch_activation_counts(self._keys_in_view_order())
-
-    def _fetch_activation_counts(self, keys: list):
-        """Silently fetch getLicense for each key at 50ms intervals to populate
-        activation and violation counts. The 60s refresh countdown only starts
-        once the last drip lands, so the timer can't fire mid-drip."""
-        if not keys:
-            return
-        self._activation_timer.stop()
-        self._dripping = True
-        self._update_countdown()
-        auth = self._get_auth()
-
-        def fetch_next(idx: int):
-            if idx >= len(keys):
-                self._dripping = False
-                self._activation_timer.start()
-                self._update_countdown()
-                return
-            key = keys[idx]
-
-            def fetch():
-                return self.api.get_license(auth, key)
-
-            def on_result(result):
-                if result.get("success"):
-                    activations = result.get("activations", [])
-                    self.model.update_activation_count(key, len(activations))
-                    violations = result.get("violations", [])
-                    unresolved = sum(1 for v in violations if not v.get("resolved"))
-                    self.model.update_violation_count(key, unresolved)
-                QTimer.singleShot(50, lambda: fetch_next(idx + 1))
-
-            w = Worker(fetch)
-            w.finished.connect(on_result)
-            w.error.connect(lambda _: QTimer.singleShot(50, lambda: fetch_next(idx + 1)))
-            self._workers.append(w)
-            w.finished.connect(lambda: self._workers.remove(w) if w in self._workers else None)
-            w.error.connect(lambda _: self._workers.remove(w) if w in self._workers else None)
-            w.start()
-
-        fetch_next(0)
 
     def _show_error(self, msg: str):
         self.statusBar().showMessage(f"Error: {msg}", 8000)
@@ -3120,7 +3076,12 @@ class LicenseManager(QMainWindow):
             self._refresh_codes()
         self._refresh_products(then=after_products)
 
+    def _auto_refresh_licenses(self):
+        """60-second auto-refresh."""
+        self._refresh_licenses()
+
     def _refresh_licenses(self):
+        self._activation_timer.stop()
         self._show_status("Refreshing licenses...")
         self.refresh_btn.setEnabled(False)
 
@@ -3167,7 +3128,8 @@ class LicenseManager(QMainWindow):
             self.refresh_btn.setEnabled(True)
             self._update_button_states()
             self._show_status(f"Loaded {len(licenses)} licenses")
-            self._fetch_activation_counts(self._keys_in_view_order())
+            self._activation_timer.start()
+            self._update_countdown()
 
         def on_err(msg):
             self.refresh_btn.setEnabled(True)
@@ -3267,10 +3229,14 @@ class LicenseManager(QMainWindow):
         def on_done(result):
             if result.get("success"):
                 self.model.update_license_row(license_key, result)
-                activations = result.get("activations", [])
-                self.model.update_activation_count(license_key, len(activations))
-                violations = result.get("violations", [])
-                self.model.update_violation_count(license_key, len(violations))
+                machines_used = result.get("machinesUsed")
+                if machines_used is not None:
+                    self.model.update_activation_count(license_key, machines_used)
+                unresolved = result.get("unresolvedViolationsCount")
+                if unresolved is None:
+                    violations = result.get("violations", [])
+                    unresolved = sum(1 for v in violations if not v.get("resolved"))
+                self.model.update_violation_count(license_key, unresolved)
                 self._show_status("License updated.")
 
         self._run_async(fetch, on_done)
@@ -3289,8 +3255,15 @@ class LicenseManager(QMainWindow):
 
         def on_done(result):
             if result.get("success"):
-                activations = result.get("activations", [])
-                self.model.update_activation_count(lic["key"], len(activations))
+                machines_used = result.get("machinesUsed")
+                if machines_used is not None:
+                    self.model.update_activation_count(lic["key"], machines_used)
+                lic_data = result.get("license") or {}
+                unresolved = lic_data.get("unresolvedViolationsCount")
+                if unresolved is None:
+                    violations = result.get("violations", [])
+                    unresolved = sum(1 for v in violations if not v.get("resolved"))
+                self.model.update_violation_count(lic["key"], unresolved)
                 dlg = LicenseDetailDialog(
                     result, self,
                     api=self.api,

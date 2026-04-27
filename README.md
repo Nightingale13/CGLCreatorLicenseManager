@@ -108,7 +108,7 @@ Errors appear in red with an 8-second timeout.
 
 ![Status Bar](_readme_images/StatusBar.jpg)
 
-The status bar on the **right side** shows **"Dripping license statuses..."** while the background drip fetch is running, then swaps to a live countdown to the next automatic activation/violation refresh. [Activation Counts](#-activation-counts)
+The status bar on the **right side** shows a live countdown to the next automatic activation and violation refresh. [Activation Counts](#-activation-counts)
 
 ---
 ## 🔑 Licenses
@@ -137,7 +137,7 @@ The Licenses tab shows all licenses for the selected product(s).
 | **Refunded**       | Yes if a refund or chargeback was processed.                                                                                           |
 | **Disabled**       | Yes if the license is revoked or suspended.                                                                                            |
 | **Expired**        | Yes if the license has passed its expiry date.                                                                                         |
-| **Violations**     | Count of anti-piracy violations on record for the license. Shows `—` until the background drip fetch populates it (red text when > 0). |
+| **Violations**     | Count of unresolved anti-piracy violations. Populated immediately on every load (red text when > 0).                                   |
 | **Threat lvl**     | Anti-piracy threat level 0–4 (hover for description, see [Threat Levels](#-threat-levels)).                                            |
 | **Product**        | Product name from CG Lounge.                                                                                                           |
 > Double-click any row to open the [License Detail](#license-detail) dialog.
@@ -353,13 +353,12 @@ Double-click a row (or click **View Details**) to open the detail dialog showing
 ---
 
 ## 📈 Activation Counts
-The CG Lounge License Server's list endpoint does not return live activation counts or violation counts. The app fetches them automatically in the background via a single `getLicense` call per row (activations and violations come from the same response).
+Activation counts (`machinesUsed`) and unresolved violation counts (`unresolvedViolationsCount`) are returned directly by `listLicenses` — both columns are populated immediately on every load with zero extra server calls.
 
 ![Status Bar](_readme_images/RefreshCount.jpg)
-- **After every refresh** — counts are dripped one license at a time at 50ms intervals to avoid overloading the server. The drip follows the **current table sort/filter order**, so visible rows fill in first.
-- **During the drip** — the status bar shows `Dripping license statuses...` and the 60-second refresh timer is paused.
-- **Every 60 seconds** — once the drip finishes, a background timer re-fetches all counts automatically. A live countdown in the bottom-right status bar shows when the next refresh is due.
-- **On detail view** — opening the **View Details** dialog for a license fetches its activations and violations immediately and updates that row.
+- **After every refresh** — activation and violation counts are available instantly; no background drip is needed.
+- **Every 60 seconds** — a background timer re-runs `listLicenses` to keep counts current. A live countdown in the bottom-right status bar shows when the next refresh is due.
+- **On detail view** — opening the **View Details** dialog for a license fetches its full activation list and live violation details, and updates that row's counts immediately.
 ---
 ## For more information, see below:
 - [Licensing Handbook](https://cglounge.studio/handbook/licensing).

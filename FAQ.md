@@ -7,10 +7,9 @@
 - [API Key rejected / 401 Unauthorized](#api-key-rejected--401-unauthorized)
 - [Window opens off-screen after a monitor change](#window-opens-off-screen-after-a-monitor-change)
 - [Nothing happens when I press `Ctrl+N`](#nothing-happens-when-i-press-ctrln)
-- [Violations column stays on `—` forever](#violations-column-stays-on--forever-)
+- [Violations column shows `—` or stale count](#violations-column-shows--or-stale-count)
 - [Edit dialog shows OK but nothing changes on the server](#edit-dialog-shows-ok-but-nothing-changes-on-the-server-)
-- [Create Code with `All Products` doesn't show up for every product](#create-code-with-all-products-doesnt-show-up-for-every-product-)
-- [Refresh feels slow / the server seems hammered](#refresh-feels-slow--the-server-seems-hammered)
+- [Refresh feels slow / licenses take a long time to load](#refresh-feels-slow--licenses-take-a-long-time-to-load)
 - [Status bar error disappears too quickly](#status-bar-error-disappears-too-quickly-)
 - [Privacy Mode didn't pixelate a field](#privacy-mode-didnt-pixelate-a-field-)
 ---
@@ -36,13 +35,11 @@ If you need to reset window position, delete the settings file:
 - **macOS:** `~/Library/Preferences/com.cglounge.Creator License Manager.plist`
 
 ## Nothing happens when I press `Ctrl+N`:
-The shortcut is context-aware: on the **Licenses** tab it creates a license; on the **Discount / Trial Codes** tab it creates a trial.
-Use `Ctrl+Shift+N` on the Codes tab for a discount.
+The shortcut is context-aware: on the **Licenses** tab it creates a license; on the **Trial Codes** tab it creates a trial code.
 
-## Violations column stays on `—` forever: 
-The violation count is fetched by the same background drip as activations.
-If the drip hasn't completed, check the status bar — it should read `Dripping license statuses...`.
-If it's stuck, press `F5` to restart the fetch cycle.
+## Violations column shows `—` or stale count:
+Violation counts are fetched as part of the main `listLicenses` call and should populate immediately on every refresh.
+If the column shows `—`, press `F5` to trigger a full refresh. You can also right-click any row and choose **Refresh License** to update that row individually, or open **View Details** to pull the latest data for that license.
 > If it still doesn't update, please contact CG Lounge Admin, or open a bug report [HERE](https://github.com/Nightingale13/CGLCreatorLicenseManager/issues).
 
 ## Edit dialog shows OK but nothing changes on the server: 
@@ -50,13 +47,8 @@ The edit dialog only sends changed fields.
 If you opened Edit, made no changes, and clicked OK, the app intentionally skips the API call.
 Also note: `licenseType` is not a supported `updateLicense` field — changing Type in the UI will not persist to the server.
 
-## Create Code with `All Products` doesn't show up for every product: 
-`All Products` trial/discount codes are stored at the creator level, not per-product.
-They still only appear once in the Codes tab regardless of the Product filter.
-
-## Refresh feels slow / the server seems hammered:
-The drip deliberately spaces `getLicense` calls at 50ms intervals to avoid rate limits.
-A large catalog (hundreds of licenses) can take a minute or more to fully drip; the 60-second auto-refresh timer waits until the drip finishes before starting.
+## Refresh feels slow / licenses take a long time to load:
+Refresh runs one `listLicenses` call per product. If you have many products, these calls run sequentially and can take a few seconds in total. Activation and violation counts are included in the same response — no additional per-row calls are made.
 
 ## Status bar error disappears too quickly: 
 Errors auto-clear after 8 seconds. Re-trigger the action to see the message again.

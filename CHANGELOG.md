@@ -1,7 +1,7 @@
 # Change Log
 All notable changes to this project will be documented below.
 
-## [1.0.0] - 2026-04-15
+## [1.0.0] - 2026-04-27
 First public release. Baseline feature set of the CG Lounge Creator License Manager.
 
 ### Core License Management
@@ -13,31 +13,30 @@ First public release. Baseline feature set of the CG Lounge Creator License Mana
 - Confirmation prompt when overriding the variant's default Max Machines value.
 - **License Detail** dialog with three tabs: Overview, Activations, and Violations. Resolve false-positive violations directly from the dialog.
 
-### Trials & Discount Codes
-- Full CRUD for trial and discount codes on a dedicated **Discount / Trial Codes** tab.
-- Separate **Create Trial** and **Create Discount** dialogs.
+### Trial Codes
+- Full CRUD for trial redemption codes on a dedicated **Trial Codes** tab.
+- **Create Trial Code** dialog with product selection, configurable trial duration (days), optional expiration date, and a random code generator.
 - **Edit Code** dialog for toggling active state, max uses, and expiry. Orange border highlights any field that differs from its original value.
-- **All Products** support — create a single code that applies to every product on your creator account.
 - Delete, enable/disable, copy, and multi-select actions mirrored from the Licenses tab.
 
 ### Products & Filtering
 - Products fetched dynamically at launch and on every refresh via `POST /listProducts` (`live`, `unlisted`, and `archived` included).
 - Product-name and product-status filter dropdowns in the toolbar, colour-coded (🟢 Active / 🟠 Unlisted / 🟡 Archived).
 - Free-text search bar over license key, email, country, and code.
-- Per-tab filter checkboxes: **Hide Trials**, **Hide Disabled**, **Hide Expired** on Licenses; **Hide Disabled** on Codes.
+- Per-tab filter checkboxes: **Hide Trials**, **Hide Disabled**, **Hide Expired** on Licenses; **Hide Disabled** and **Hide Expired** on Trial Codes.
 - Sortable tables with sort order persisted across launches via `QSettings`.
 
 ### Activation & Violation Tracking
-- Background **drip fetch** of activation counts and violation counts via a single `getLicense` call per row (shared payload).
-- Drip follows the current table sort/filter order — visible rows fill in first.
-- Activations column shows `—/{max}` and Violations column shows `—` until the drip populates them; violation counts > 0 render in red.
-- 60-second auto-refresh timer kicks in only after the initial drip completes, so the server is never hammered mid-fetch.
-- Status bar shows **"Dripping license statuses..."** during the drip, then a live countdown to the next auto-refresh.
-- Opening **View Details** for a license fetches its activations and violations immediately and updates that row.
-- **Activations** tab inside the detail dialog has a live hostname/country filter and an **Only active sessions** toggle.
+- Activation counts (`machinesUsed`) and unresolved violation counts (`unresolvedViolationsCount`) are returned directly by `listLicenses` — both columns populate immediately on every load with zero extra server calls.
+- 60-second auto-refresh timer re-runs `listLicenses` to keep both activation and violation counts current automatically.
+- Violation and activation counts are also refreshed per-row via **View Details**, **Refresh License** (right-click), or **Reset Activations**.
+- Violation counts > 0 render in red.
+- Status bar shows a live countdown to the next auto-refresh.
+- Opening **View Details** for a license fetches its full activation list and live violation details, and updates that row's counts immediately.
+- **Activations** tab inside the detail dialog has a live hostname/country filter and an **Only active sessions** toggle (relevant for `floating` licenseType only).
 
 ### UI / UX
-- Tabbed interface (Licenses / Discount & Trial Codes) with active tab persisted across launches.
+- Tabbed interface (Licenses / Trial Codes) with active tab persisted across launches.
 - CG Lounge theme applied app-wide.
 - **Privacy Mode** toolbar toggle that pixelates sensitive columns and dialog fields (license key, email, productID, code).
 - **Snap Tabs** toolbar toggle that auto-resizes the window to fit the current tab's column widths and re-snaps on tab switch or refresh.
@@ -50,9 +49,8 @@ First public release. Baseline feature set of the CG Lounge Creator License Mana
 - Result counter label showing visible / total licenses.
 
 ### Keyboard Shortcuts
-- `F5` — refresh all (products, licenses, trials/discounts).
-- `Ctrl+N` — context-aware: creates a license on the Licenses tab, a trial on the Discount / Trial Codes tab.
-- `Ctrl+Shift+N` — creates a discount code on the Discount / Trial Codes tab.
+- `F5` — refresh all (products, licenses, trial codes).
+- `Ctrl+N` — context-aware: creates a license on the Licenses tab, a trial code on the Trial Codes tab.
 
 ### Anti-Piracy Integration
 - **Threat lvl** column (0–4) colour-coded with full-description tooltips, driven by the CG Lounge anti-piracy system.
