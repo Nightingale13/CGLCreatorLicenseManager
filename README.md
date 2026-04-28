@@ -31,18 +31,16 @@ Built with Python and PySide6.
   - 📊 [Status Bar](#status-bar)
 - 🔑 [Licenses](#-licenses)
   - ⚡ [License Action Buttons](#license-action-buttons-bottom)
+  - 🖱️ [Licenses Right-Click Menu](#licenses---right-click-context-menu)
   - 🟢 [License Statuses](#-license-statuses)
   - ⚠️ [Threat Levels](#-threat-levels)
   - ✏️ [Create / Edit License](#license-dialogs)
-  - 🖱️ [Licenses Right-Click Menu](#licenses---right-click-context-menu)
   - 🔍 [License Detail](#license-detail)
 - 🎟️ [Trial Codes](#-trial-codes)
   - ⚡ [Trial Code Action Buttons](#trial-code-action-buttons-bottom)
-  - 🟢 [Trial Code Statuses](#-trial-code-statuses)
-  - ➕ [Create Trial Code](#create-trial-code)
   - 🖱️ [Trial Codes Right-Click Menu](#right-click-context-menu---trial-codes)
-  - ✏️ [Edit Trial Code](#edit-trial-code)
-  - 🔍 [Trial Code Detail](#trial-code-detail)
+  - 🟢 [Trial Code Statuses](#-trial-code-statuses)
+  - ✏️ [Create / Edit Trial Code](#trial-dialogs)
 - ⌨️ [Keyboard Shortcuts](#-keyboard-shortcuts)
 - 📈 [Activation Counts](#-activation-counts)
 - 👥 [Contributions](#-contributions)
@@ -84,17 +82,17 @@ SERVER_URL=
 ### Toolbar (top)
 ![License Overview](_readme_images/ToolBar.jpg)
 
-| Control             | Description                                                                                                                       |
-|---------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| **Product Status**  | Filter the table by product status, pulled from CG Lounge:<br/>🟢 **Active**, 🟠 **Unlisted**, 🟡 **Archived**                    |
-| **Product**         | Filter the table by product name.                                                                                                 |
-| **Search Bar**      | Filter the table by license key, email, tier, status, trial code, or product name.                                                |
-| **Snap Tabs** ☑️    | Auto-resize the window to fit the current tab's column widths. Re-snaps when switching tabs or refreshing.                        |
-| **Snap Centre** ☑️  | When Snap Tabs is on, re-centers the window on the current screen after each snap. Disabled unless Snap Tabs is checked.          |
-| **Privacy Mode** ☑️ | Pixelates sensitive columns (key, email, productID, code, etc) in fields in dialogs.                                              |
-| **Result counter**  | Shows how many licenses are currently visible/loaded.                                                                             |
-| **? button**        | Opens this documentation in your browser.                                                                                         |
-| **🐛 button**       | Opens the [GitHub Issues](https://github.com/Nightingale13/CGLCreatorLicenseManager/issues) page in your browser to report a bug. |
+| Control             | Description                                                                                                                          |
+|---------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| **Product Status**  | Filter the table by product status, pulled from CG Lounge:<br/>🟢 **Active**, 🟠 **Unlisted**, 🟡 **Archived**                       |
+| **Product**         | Filter the table by product name.                                                                                                    |
+| **Search Bar**      | Filter by license key, email, tier, status, or product ID (Licenses tab); or by code, product name, or product ID (Trial Codes tab). |
+| **Snap Tabs** ☑️    | Auto-resize the window to fit the current tab's column widths. Re-snaps when switching tabs or refreshing.                           |
+| **Snap Centre** ☑️  | When Snap Tabs is on, re-centers the window on the current screen after each snap. Disabled unless Snap Tabs is checked.             |
+| **Privacy Mode** ☑️ | Pixelates sensitive columns (key, email, productID, code, etc) in fields in dialogs.                                                 |
+| **Result counter**  | Shows how many licenses are currently visible/loaded.                                                                                |
+| **? button**        | Opens this documentation in your browser.                                                                                            |
+| **🐛 button**       | Opens the [GitHub Issues](https://github.com/Nightingale13/CGLCreatorLicenseManager/issues) page in your browser to report a bug.    |
 
 ### Loading Bar
 A thin purple progress bar appears below the table whenever a server request is in flight.
@@ -142,6 +140,7 @@ The Licenses tab shows all licenses for the selected product(s).
 | **Product**        | Product name from CG Lounge.                                                                                                           |
 > Double-click any row to open the [License Detail](#license-detail) dialog.
 > Right-click for the [context menu](#licenses---right-click-context-menu).
+
 ### License Action Buttons (bottom)
 ![License Action Buttons](_readme_images/LicenseActionButtons.jpg)
 
@@ -160,11 +159,17 @@ The Licenses tab shows all licenses for the selected product(s).
 You can select multiple rows and act on them all at once.
 
 **Revoke License options:**
+
 | Option               | Reason      | Description                                          |
 |----------------------|-------------|------------------------------------------------------|
 | **Revoke**           | `manual`    | Generic admin revoke.                                |
 | **Revoke as Fraud**  | `fraud`     | Admin flagged the license as fraudulent.             |
 | **Cancel License**   | `cancelled` | Order cancelled outside the payment flow.            |
+
+### Licenses - Right-Click Context Menu
+Right-clicking any row shows a context menu with the same actions as the bottom buttons.
+
+![Context Menu](_readme_images/LicenseContextMenu.jpg)
 
 ### 🟢 License Statuses
 The **License Status** column is updated automatically by the CG Lounge License Server's anti-piracy system.
@@ -196,30 +201,24 @@ Use **+ Create License** to open the create dialog, or select a row and click **
 
 ![Create License](_readme_images/LicenseDialogs.png)
 
-| Create License   |                                                                                                                                                                                                                                        | Edit License        |                                                                                                                                                                                                                                                                   |
-|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Product**      | List of your Products.                                                                                                                                                                                                                 | **Key**             | Full license key (selectable).                                                                                                                                                                                                                                    |
-| **Email**        | Email the license is registered to.                                                                                                                                                                                                    | **Email**           | Email the license is registered to.                                                                                                                                                                                                                               |
-| **Variant**      | List of Variants/Tiers pulled from your Product.                                                                                                                                                                                       | **Product**         | The Product the license is for.                                                                                                                                                                                                                                   |
-| **License Type** | License type, linked to the selected Variant/Tier.                                                                                                                                                                                     | **Status**          | Current status at the time the dialog was opened.                                                                                                                                                                                                                 |
-| **Max Machines** | Maximum concurrent activations. The number is pulled from each Variant/Tier on your Product.<br><br>It is **recommended** to keep these set the same as all other licenses for this variant/tier, though adjusting it is supported.    | **Created**         | Purchase/Creation date.                                                                                                                                                                                                                                           |
-| **Expires**      | Enable the checkbox to set an expiration date and time.                                                                                                                                                                                | **Editable Fields** |                                                                                                                                                                                                                                                                   |
-|                  |                                                                                                                                                                                                                                        | **Variant**         | Change the license tier of an existing key. Tiers/Variants are loaded from your Product in CG Lounge.<br><br>While "Upgrading a license" can be performed here, there is no additional pricing or sale support as of the latest release.                          |
-|                  |                                                                                                                                                                                                                                        | **License Type**    | License type, linked to the selected Variant/Tier.                                                                                                                                                                                                                |
-|                  |                                                                                                                                                                                                                                        | **Max Machines**    | Maximum concurrent activations. The number is pulled from each Variant/Tier on your Product.<br><br>It is **recommended** to keep this matching with the tier/variant that was originally offered to be fair to your customers, though adjusting it is supported. |
-|                  |                                                                                                                                                                                                                                        | **Status**          | Manually set to `active`, `degraded`, `suspended`, or `revoked`.                                                                                                                                                                                                  |
-|                  |                                                                                                                                                                                                                                        | **Expires**         | Enable the checkbox to set an expiration date and time.                                                                                                                                                                                                           |
+| Create License   |                                                                                                                                                                                                                                     | Edit License     |                                                                                                                                                                                                                                                                   |
+|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Product**      | List of your Products.                                                                                                                                                                                                              | **Key**          | Full license key (selectable).                                                                                                                                                                                                                                    |
+| **Email**        | Email the license is registered to.                                                                                                                                                                                                 | **Email**        | Email the license is registered to.                                                                                                                                                                                                                               |
+| **Variant**      | List of Variants/Tiers pulled from your Product.                                                                                                                                                                                    | **Product**      | The Product the license is for.                                                                                                                                                                                                                                   |
+| **License Type** | License type, linked to the selected Variant/Tier.                                                                                                                                                                                  | **Status**       | Current status at the time the dialog was opened.                                                                                                                                                                                                                 |
+| **Max Machines** | Maximum concurrent activations. The number is pulled from each Variant/Tier on your Product.<br><br>It is **recommended** to keep these set the same as all other licenses for this variant/tier, though adjusting it is supported. | **Created**      | Purchase/Creation date.                                                                                                                                                                                                                                           |
+| **Expires**      | Enable the checkbox to set an expiration date and time.                                                                                                                                                                             | **Variant**      | Change the license tier of an existing key. Tiers/Variants are loaded from your Product in CG Lounge.<br><br>While "Upgrading a license" can be performed here, there is no additional pricing or sale support as of the latest release.                          |
+|                  |                                                                                                                                                                                                                                     | **License Type** | License type, linked to the selected Variant/Tier.                                                                                                                                                                                                                |
+|                  |                                                                                                                                                                                                                                     | **Max Machines** | Maximum concurrent activations. The number is pulled from each Variant/Tier on your Product.<br><br>It is **recommended** to keep this matching with the tier/variant that was originally offered to be fair to your customers, though adjusting it is supported. |
+|                  |                                                                                                                                                                                                                                     | **Status**       | Manually set to `active`, `degraded`, `suspended`, or `revoked`.                                                                                                                                                                                                  |
+|                  |                                                                                                                                                                                                                                     | **Expires**      | Enable the checkbox to set an expiration date and time.                                                                                                                                                                                                           |
 > **Edit Dialog — Change Tracking:**
 > - 🟠 **Orange border** — the field has been edited from its original value.
 > - 🟡 **Yellow border** — the field has not been edited, but its current value does not match the variant/tier default (e.g. a custom Max Machines value).
 > - A hint label appears below **Max Machines** when the value differs from the variant default (e.g. *"Default for Indie is 2"*).
 > - A confirmation dialog appears when saving with a **Max Machines** value that differs from the variant default.
 > - Only fields that were actually changed are sent to the server. Clicking **OK** with no changes will do nothing.
-
-### Licenses - Right-Click Context Menu
-Right-clicking any row shows a context menu with the same actions as the bottom buttons.
-
-![Context Menu](_readme_images/LicenseContextMenu.jpg)
 
 ### License Detail
 Double-click a row (or click **View Details**) to open the detail dialog. It has three tabs:
@@ -276,6 +275,11 @@ The Trial Codes tab shows all trial codes for the selected product(s).
 > Destructive actions (Delete) show a confirmation dialog before proceeding.
 You can select multiple rows and act on them all at once.
 
+### Right-Click Context Menu - Trial Codes
+Right-clicking any row shows a context menu with the same actions as the bottom buttons.
+
+![Context Menu](_readme_images/TrialsContextMenu.jpg)
+
 ### 🟢 Trial Code Statuses
 
 | Colour        | Status        | Description                                                  |
@@ -287,60 +291,31 @@ You can select multiple rows and act on them all at once.
 
 Hover over any status dot to see a description.
 
-### Create Trial Code
+### Trial Dialogs
 
 Click **+ Create Trial Code** (or `Ctrl+N` on the Trial Codes tab) to open the create dialog.
+Select a row and click **Edit Selected** (or right-click → **Edit Code**) to open the edit dialog.
+Double-click a row (or click **View Details**) to open the detail dialog showing all stored fields for the code — code string, product, trial duration, usage counts, creation and expiry dates, and the code's current active state.
 
-![Create Trial Code](_readme_images/CreateTrialCode.jpg)
+![Trial Dialogs](_readme_images/TrialDialogs.png)
 
-| Field              | Description                                                                                           |
-|--------------------|-------------------------------------------------------------------------------------------------------|
-| **Product**        | The product this trial code applies to. Each trial code is tied to a specific product.                |
-| **Code**           | The code string customers will enter. Type one manually or click **Generate** to create a random one. |
-| **Trial Duration** | How many days of free access the code grants when redeemed. Defaults to **14 days**.                  |
-| **Max Uses**       | Maximum number of times the code can be redeemed (`-1` = Unlimited).                                  |
-| **Expires**        | Expiry date for the code itself. Enabled by default, set to **30 days from today**.                   |
+| Create Code        |                                                                                                       | Edit Code               |                                                                                 | View Code      |                                                                    |
+|--------------------|-------------------------------------------------------------------------------------------------------|-------------------------|---------------------------------------------------------------------------------|----------------|--------------------------------------------------------------------|
+| **Product**        | The product this trial code applies to. Each trial code is tied to a specific product.                | **Code**                | The code string (selectable).                                                   | **Code**       | The code string (selectable).                                      |
+| **Code**           | The code string customers will enter. Type one manually or click **Generate** to create a random one. | **Used**                | Number of times the code has already been redeemed.                             | **Product**    | Product name the code applies to.                                  |
+| **Trial Duration** | How many days of free access the code grants when redeemed. Defaults to **14 days**.                  | **Trial Duration**      | Trial length granted by this code.                                              | **Product ID** | The ID of the product in CG Lounge.                                |
+| **Max Uses**       | Maximum number of times the code can be redeemed (`-1` = Unlimited).                                  | **Created**             | Creation date of the code.                                                      | **Active**     | Yes if the code is currently available for redemption.             |
+| **Expires**        | Expiry date for the code itself. Enabled by default, set to **30 days from today**.                   | **Product**             | Product name the code applies to.                                               | **Trial Days** | How many days of free access the code grants when redeemed.        |
+|                    |                                                                                                       | **Status (Editable)**   | Toggle the `Active` checkbox to enable or disable the code without deleting it. | **Used Count** | Number of times the code has already been redeemed.                |
+|                    |                                                                                                       | **Max Uses (Editable)** | Maximum allowed redemptions (`-1` = Unlimited).                                 | **Max Uses**   | Maximum allowed redemptions (`-1` = Unlimited).                    |
+|                    |                                                                                                       | **Expires (Editable)**  | Enable the checkbox to set an expiration date and time for the code itself.     | **Created**    | Creation date of the code.                                         |
+|                    |                                                                                                       |                         |                                                                                 | **Expires**    | The day this trial code will expire and can no longer be redeemed. |
 
 > **Generate button:** Clicking Generate creates a randomised code using a mix of random characters, product name hints, and date fragments. Click it multiple times to get different variations. Generated codes are always checked against existing codes for the selected product to avoid duplicates.
-
-### Right-Click Context Menu - Trial Codes
-Right-clicking any row shows a context menu with the same actions as the bottom buttons.
-
-![Context Menu](_readme_images/TrialsContextMenu.jpg)
-
-### Edit Trial Code
-
-Select a row and click **Edit Selected** (or right-click → **Edit Code**) to open the edit dialog.
-
-![Edit Trial Code](_readme_images/EditTrial.jpg)
-
-#### The top section shows read-only code info for reference:
-
-| Field              | Description                                         |
-|--------------------|-----------------------------------------------------|
-| **Code**           | The code string (selectable).                       |
-| **Used**           | Number of times the code has already been redeemed. |
-| **Trial Duration** | Trial length granted by this code.                  |
-| **Created**        | Creation date of the code.                          |
-| **Product**        | Product name the code applies to.                   |
-
-#### The editable fields section allows the following changes:
-
-| Field        | Description                                                                     |
-|--------------|---------------------------------------------------------------------------------|
-| **Status**   | Toggle the `Active` checkbox to enable or disable the code without deleting it. |
-| **Max Uses** | Maximum allowed redemptions (`-1` = Unlimited).                                 |
-| **Expires**  | Enable the checkbox to set an expiration date and time for the code itself.     |
 
 > **Edit Dialog — Change Tracking:**
 > - 🟠 **Orange border** — the field has been edited from its original value.
 > - Only fields that were actually changed are sent to the server. Clicking **OK** with no changes will do nothing.
-
-### Trial Code Detail
-
-Double-click a row (or click **View Details**) to open the detail dialog showing all stored fields for the code — code string, product, trial duration, usage counts, creation and expiry dates, and the code's current active state.
-
-![View Code](_readme_images/ViewCode.jpg)
 
 ---
 
